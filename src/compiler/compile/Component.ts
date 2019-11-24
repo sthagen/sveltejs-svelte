@@ -1,4 +1,4 @@
-import { walk, childKeys } from 'estree-walker';
+import { walk } from 'estree-walker';
 import { getLocator } from 'locate-character';
 import Stats from '../Stats';
 import { globals, reserved, is_valid } from '../utils/names';
@@ -36,13 +36,6 @@ interface ComponentOptions {
 	accessors?: boolean;
 	preserveWhitespace?: boolean;
 }
-
-// We need to tell estree-walker that it should always
-// look for an `else` block, otherwise it might get
-// the wrong idea about the shape of each/if blocks
-childKeys.EachBlock = childKeys.IfBlock = ['children', 'else'];
-childKeys.Attribute = ['value'];
-childKeys.ExportNamedDeclaration = ['declaration', 'specifiers'];
 
 export default class Component {
 	stats: Stats;
@@ -209,7 +202,6 @@ export default class Component {
 			});
 
 			const subscribable_name = name.slice(1);
-			this.add_reference(subscribable_name);
 
 			const variable = this.var_lookup.get(subscribable_name);
 			if (variable) variable.subscribable = true;
@@ -889,50 +881,6 @@ export default class Component {
 		return null;
 	}
 
-	invalidate(name, value?) {
-		const variable = this.var_lookup.get(name);
-
-		if (variable && (variable.subscribable && (variable.reassigned || variable.export_name))) {
-			return x`${`$$subscribe_${name}`}($$invalidate('${name}', ${value || name}))`;
-		}
-
-		if (name[0] === '$' && name[1] !== '$') {
-			return x`${name.slice(1)}.set(${value || name})`;
-		}
-
-		if (
-			variable &&
-			!variable.referenced &&
-			!variable.is_reactive_dependency &&
-			!variable.export_name &&
-			!name.startsWith('$$')
-		) {
-			return value || name;
-		}
-
-		if (value) {
-			return x`$$invalidate('${name}', ${value})`;
-		}
-
-		// if this is a reactive declaration, invalidate dependencies recursively
-		const deps = new Set([name]);
-
-		deps.forEach(name => {
-			const reactive_declarations = this.reactive_declarations.filter(x =>
-				x.assignees.has(name)
-			);
-			reactive_declarations.forEach(declaration => {
-				declaration.dependencies.forEach(name => {
-					deps.add(name);
-				});
-			});
-		});
-
-		return Array.from(deps)
-			.map(n => x`$$invalidate('${n}', ${n})`)
-			.reduce((lhs, rhs) => x`${lhs}, ${rhs}}`);
-	}
-
 	rewrite_props(get_insert: (variable: Var) => Node[]) {
 		if (!this.ast.instance) return;
 
@@ -1053,6 +1001,10 @@ export default class Component {
 				const all_hoistable = node.declarations.every(d => {
 					if (!d.init) return false;
 					if (d.init.type !== 'Literal') return false;
+
+					// everything except const values can be changed by e.g. svelte devtools
+					// which means we can't hoist it
+					if (node.kind !== 'const' && this.compile_options.dev) return false;
 
 					const { name } = d.id as Identifier;
 
@@ -1323,25 +1275,6 @@ export default class Component {
 			seen = new Set();
 			add_declaration(declaration);
 		});
-	}
-
-	qualify(name) {
-		if (name === `$$props`) return x`#ctx.$$props`;
-
-		let [head, ...tail] = name.split('.');
-
-		const variable = this.var_lookup.get(head);
-
-		if (variable) {
-			this.add_reference(name); // TODO we can probably remove most other occurrences of this
-
-			if (!variable.hoistable) {
-				tail.unshift(head);
-				head = '#ctx';
-			}
-		}
-
-		return [head, ...tail].reduce((lhs, rhs) => x`${lhs}.${rhs}`);
 	}
 
 	warn_if_undefined(name: string, node, template_scope: TemplateScope) {
