@@ -462,6 +462,7 @@ The following modifiers are available:
 * `passive` — improves scrolling performance on touch/wheel events (Svelte will add it automatically where it's safe to do so)
 * `capture` — fires the handler during the *capture* phase instead of the *bubbling* phase
 * `once` — remove the handler after the first time it runs
+* `self` — only trigger handler if event.target is the element itself
 
 Modifiers can be chained together, e.g. `on:click|once|capture={...}`.
 
@@ -815,7 +816,7 @@ transition = (node: HTMLElement, params: any) => {
 
 A transition is triggered by an element entering or leaving the DOM as a result of a state change.
 
-When a block is transitioning out, elements inside the block are kept in the DOM until all current transitions have completed.
+When a block is transitioning out, all elements inside the block, including those that do not have their own transitions, are kept in the DOM until every transition in the block has completed.
 
 The `transition:` directive indicates a *bidirectional* transition, which means it can be smoothly reversed while the transition is in progress.
 
