@@ -98,7 +98,9 @@ export function set_attributes(node: Element & ElementCSSInlineStyle, attributes
 			node.removeAttribute(key);
 		} else if (key === 'style') {
 			node.style.cssText = attributes[key];
-		} else if (key === '__value' || descriptors[key] && descriptors[key].set) {
+		} else if (key === '__value') {
+			(node as any).value = node[key] = attributes[key];
+		} else if (descriptors[key] && descriptors[key].set) {
 			node[key] = attributes[key];
 		} else {
 			attr(node, key, attributes[key]);
@@ -190,9 +192,7 @@ export function set_data(text, data) {
 }
 
 export function set_input_value(input, value) {
-	if (value != null || input.value) {
-		input.value = value;
-	}
+	input.value = value == null ? '' : value;
 }
 
 export function set_input_type(input, type) {
@@ -270,9 +270,11 @@ export function add_resize_listener(node: HTMLElement, fn: () => void) {
 	iframe.setAttribute('aria-hidden', 'true');
 	iframe.tabIndex = -1;
 
+	const crossorigin = is_crossorigin();
+
 	let unsubscribe: () => void;
 
-	if (is_crossorigin()) {
+	if (crossorigin) {
 		iframe.src = `data:text/html,<script>onresize=function(){parent.postMessage(0,'*')}</script>`;
 		unsubscribe = listen(window, 'message', (event: MessageEvent) => {
 			if (event.source === iframe.contentWindow) fn();
@@ -287,8 +289,13 @@ export function add_resize_listener(node: HTMLElement, fn: () => void) {
 	append(node, iframe);
 
 	return () => {
+		if (crossorigin) {
+			unsubscribe();
+		} else if (unsubscribe && iframe.contentWindow) {
+			unsubscribe();
+		}
+		
 		detach(iframe);
-		if (unsubscribe) unsubscribe();
 	};
 }
 
