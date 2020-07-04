@@ -120,12 +120,9 @@ export default class Expression {
 				if (function_expression) {
 					if (node.type === 'AssignmentExpression') {
 						deep = node.left.type === 'MemberExpression';
-						names = deep
-							? [get_object(node.left).name]
-							: extract_names(node.left);
+						names = extract_names(deep ? get_object(node.left) : node.left);
 					} else if (node.type === 'UpdateExpression') {
-						const { name } = get_object(node.argument);
-						names = [name];
+						names = extract_names(get_object(node.argument));
 					}
 				}
 
@@ -201,7 +198,7 @@ export default class Expression {
 					scope = map.get(node);
 				}
 
-				if (is_reference(node, parent)) {
+				if (node.type === 'Identifier' && is_reference(node, parent)) {
 					const { name } = flatten_reference(node);
 
 					if (scope.has(name)) return;
