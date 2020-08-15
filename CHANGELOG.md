@@ -2,10 +2,22 @@
 
 ## Unreleased
 
+* Expose object of which slots have received content in `$$slots` ([#2106](https://github.com/sveltejs/svelte/issues/2106))
+* Add types to `createEventDispatcher` ([#5211](https://github.com/sveltejs/svelte/issues/5211))
+* In SSR mode, do not automatically declare variables for reactive assignments to member expressions ([#5247](https://github.com/sveltejs/svelte/issues/5247))
+* Include selector in message of `unused-css-selector` warning ([#5252](https://github.com/sveltejs/svelte/issues/5252))
+* Fix using `<Namespaced.Component/>`s in child `{#await}`/`{#each}` contexts ([#5255](https://github.com/sveltejs/svelte/issues/5255))
+* Fix using `<svelte:component>` in `{:catch}` ([#5259](https://github.com/sveltejs/svelte/issues/5259))
+
+## 3.24.1
+
 * Prevent duplicate invalidation with certain two-way component bindings ([#3180](https://github.com/sveltejs/svelte/issues/3180), [#5117](https://github.com/sveltejs/svelte/issues/5117), [#5144](https://github.com/sveltejs/svelte/issues/5144))
 * Fix reactivity when passing `$$props` to a `<slot>` ([#3364](https://github.com/sveltejs/svelte/issues/3364))
+* Fix transitions on `{#each}` `{:else}` ([#4970](https://github.com/sveltejs/svelte/issues/4970))
 * Fix unneeded invalidation of `$$props` and `$$restProps` ([#4993](https://github.com/sveltejs/svelte/issues/4993), [#5118](https://github.com/sveltejs/svelte/issues/5118))
 * Provide better compiler error message when mismatched tags are due to autoclosing of tags ([#5049](https://github.com/sveltejs/svelte/issues/5049))
+* Add `a11y-label-has-associated-control` warning ([#5074](https://github.com/sveltejs/svelte/pull/5074))
+* Add `a11y-media-has-caption` warning ([#5075](https://github.com/sveltejs/svelte/pull/5075))
 * Fix `bind:group` when using contextual reference ([#5174](https://github.com/sveltejs/svelte/issues/5174))
 
 ## 3.24.0
