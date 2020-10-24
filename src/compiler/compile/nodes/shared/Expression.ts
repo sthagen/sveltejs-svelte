@@ -64,6 +64,8 @@ export default class Expression {
 			enter(node: any, parent: any, key: string) {
 				// don't manipulate shorthand props twice
 				if (key === 'value' && parent.shorthand) return;
+				// don't manipulate `import.meta`, `new.target`
+				if (node.type === 'MetaProperty') return this.skip();
 
 				if (map.has(node)) {
 					scope = map.get(node);
@@ -83,8 +85,8 @@ export default class Expression {
 						const store_name = name.slice(1);
 						if (template_scope.names.has(store_name) || scope.has(store_name)) {
 							component.error(node, {
-								code: `contextual-store`,
-								message: `Stores must be declared at the top level of the component (this may change in a future version of Svelte)`
+								code: 'contextual-store',
+								message: 'Stores must be declared at the top level of the component (this may change in a future version of Svelte)'
 							});
 						}
 					}

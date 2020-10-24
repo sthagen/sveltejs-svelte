@@ -3,7 +3,7 @@ import get_object from '../utils/get_object';
 import Expression from './shared/Expression';
 import Component from '../Component';
 import TemplateScope from './shared/TemplateScope';
-import {dimensions} from "../../utils/patterns";
+import {dimensions} from '../../utils/patterns';
 import { Node as ESTreeNode } from 'estree';
 
 // TODO this should live in a specific binding
@@ -76,7 +76,7 @@ export default class Binding extends Node {
 
 			if (info.expression.type === 'Identifier' && !variable.writable) component.error(this.expression.node, {
 				code: 'invalid-binding',
-				message: 'Cannot bind to a variable which is not writable',
+				message: 'Cannot bind to a variable which is not writable'
 			});
 		}
 
