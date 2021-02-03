@@ -26,6 +26,7 @@ import Action from '../../../nodes/Action';
 import MustacheTagWrapper from '../MustacheTag';
 import RawMustacheTagWrapper from '../RawMustacheTag';
 import create_slot_block from './create_slot_block';
+import is_dynamic from '../shared/is_dynamic';
 
 interface BindingGroup {
 	events: string[];
@@ -321,7 +322,7 @@ export default class ElementWrapper extends Wrapper {
 				literal.quasis.push(state.quasi);
 
 				block.chunks.create.push(
-					b`${node}.${this.can_use_innerhtml ? 'innerHTML': 'textContent'} = ${literal};`
+					b`${node}.${this.can_use_innerhtml ? 'innerHTML' : 'textContent'} = ${literal};`
 				);
 			}
 		} else {
@@ -851,7 +852,21 @@ export default class ElementWrapper extends Wrapper {
 			${outro && b`@add_transform(${this.var}, ${rect});`}
 		`);
 
-		const params = this.node.animation.expression ? this.node.animation.expression.manipulate(block) : x`{}`;
+		let params;
+		if (this.node.animation.expression) {
+			params = this.node.animation.expression.manipulate(block);
+
+			if (this.node.animation.expression.dynamic_dependencies().length) {
+				// if `params` is dynamic, calculate params ahead of time in the `.r()` method
+				const params_var = block.get_unique_name('params');
+				block.add_variable(params_var);
+
+				block.chunks.measure.push(b`${params_var} = ${params};`);
+				params = params_var;
+			}
+		} else {
+			params = x`{}`;
+		}
 
 		const name = this.renderer.reference(this.node.animation.name);
 
@@ -884,10 +899,19 @@ export default class ElementWrapper extends Wrapper {
 				const all_dependencies = this.class_dependencies.concat(...dependencies);
 				const condition = block.renderer.dirty(all_dependencies);
 
-				block.chunks.update.push(b`
-					if (${condition}) {
-						${updater}
-					}`);
+				// If all of the dependencies are non-dynamic (don't get updated) then there is no reason
+				// to add an updater for this.
+				const any_dynamic_dependencies = all_dependencies.some((dep) => {
+					const variable = this.renderer.component.var_lookup.get(dep);
+					return !variable || is_dynamic(variable);
+				});
+				if (any_dynamic_dependencies) {
+					block.chunks.update.push(b`
+						if (${condition}) {
+							${updater}
+						}
+					`);
+				}
 			}
 		});
 	}
