@@ -1,19 +1,19 @@
 import { run_all, subscribe, noop, safe_not_equal, is_function, get_store_value } from 'svelte/internal';
 
 /** Callback to inform of a value updates. */
-type Subscriber<T> = (value: T) => void;
+export type Subscriber<T> = (value: T) => void;
 
 /** Unsubscribes from value updates. */
-type Unsubscriber = () => void;
+export type Unsubscriber = () => void;
 
 /** Callback to update a value. */
-type Updater<T> = (value: T) => T;
+export type Updater<T> = (value: T) => T;
 
 /** Cleanup logic callback. */
 type Invalidator<T> = (value?: T) => void;
 
 /** Start and stop notification callbacks. */
-type StartStopNotifier<T> = (set: Subscriber<T>) => Unsubscriber | void;
+export type StartStopNotifier<T> = (set: Subscriber<T>) => Unsubscriber | void;
 
 /** Readable interface for subscribing. */
 export interface Readable<T> {
@@ -22,7 +22,7 @@ export interface Readable<T> {
 	 * @param run subscription callback
 	 * @param invalidate cleanup callback
 	 */
-	subscribe(run: Subscriber<T>, invalidate?: Invalidator<T>): Unsubscriber;
+	subscribe(this: void, run: Subscriber<T>, invalidate?: Invalidator<T>): Unsubscriber;
 }
 
 /** Writable interface for both updating and subscribing. */
@@ -31,13 +31,13 @@ export interface Writable<T> extends Readable<T> {
 	 * Set value and inform subscribers.
 	 * @param value to set
 	 */
-	set(value: T): void;
+	set(this: void, value: T): void;
 
 	/**
 	 * Update value using callback and inform subscribers.
 	 * @param updater callback
 	 */
-	update(updater: Updater<T>): void;
+	update(this: void, updater: Updater<T>): void;
 }
 
 /** Pair of subscriber and invalidator. */

@@ -5,9 +5,9 @@ author: Rich Harris
 authorURL: https://twitter.com/rich_harris
 ---
 
-It's time. After five months and hundreds of commits, you're finally invited to try out the SvelteKit beta. It's not finished — there are a few known bugs and several missing features — but we're really happy with how it's shaping up and can't wait for you to try it.
-
 <aside><p>Previously: <a href="/blog/whats-the-deal-with-sveltekit">What's the deal with SvelteKit?</a></p></aside>
+
+It's time. After five months and hundreds of commits, you're finally invited to try out the SvelteKit beta. It's not finished — there are a few known bugs and several missing features — but we're really happy with how it's shaping up and can't wait for you to try it.
 
 Starting a new project is easy:
 
@@ -27,6 +27,13 @@ npm run dev -- --open
 You'll find documentation at [kit.svelte.dev/docs](https://kit.svelte.dev/docs). If you have a [Sapper](https://sapper.svelte.dev) app that you'd like to migrate to SvelteKit, you'll find instructions at [kit.svelte.dev/migrating](https://kit.svelte.dev/migrating).
 
 The source code is available at [github.com/sveltejs/kit](https://github.com/sveltejs/kit). Issues and pull requests are disabled while we finish getting our house in order, but we'll be making it fully open in the near future.
+
+
+## Wait, what is SvelteKit?
+
+Think of it as [Next](https://nextjs.org/) for Svelte. It's a framework for building apps with Svelte, complete with server-side rendering, routing, code-splitting for JS and CSS, adapters for different serverless platforms and so on.
+
+If you're familiar with [Sapper](https://sapper.svelte.dev), SvelteKit is Sapper's successor.
 
 ## From Snowpack to Vite
 
