@@ -1,5 +1,10 @@
 # Svelte changelog
 
+## Unreleased
+
+* Add missing function overload for `derived` to allow explicitly setting an initial value for non-async derived stores ([#6172](https://github.com/sveltejs/svelte/pull/6172))
+* Pass full markup source to script/style preprocessors ([#6169](https://github.com/sveltejs/svelte/pull/6169))
+
 ## 3.37.0
 
 * Allow root-level context to be passed to the component constructor ([#6032](https://github.com/sveltejs/svelte/pull/6032))
