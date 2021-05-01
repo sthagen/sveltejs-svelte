@@ -1,11 +1,19 @@
 # Svelte changelog
 
-## Unreleased
+## 3.38.0
 
-* Avoid recreating DOM elements during hydration ([#6204](https://github.com/sveltejs/svelte/pull/6204))
+* Avoid recreating DOM elements during hydration ([#1067](https://github.com/sveltejs/svelte/issues/1067))
+* Support passing CSS custom properties to component ([#5628](https://github.com/sveltejs/svelte/issues/5628))
+* Support `:global()` as part of compound CSS selectors ([#6222](https://github.com/sveltejs/svelte/issues/6222))
+* Fix updating `<slot>` contents when there's an aborted transition ([#3542](https://github.com/sveltejs/svelte/issues/3542))
+* Fix setting boolean attributes on custom elements ([#5951](https://github.com/sveltejs/svelte/issues/5951))
 * Add missing function overload for `derived` to allow explicitly setting an initial value for non-async derived stores ([#6172](https://github.com/sveltejs/svelte/pull/6172))
-* Pass full markup source to script/style preprocessors ([#6169](https://github.com/sveltejs/svelte/pull/6169))
-* Add "context" typing to SvelteComponent constructor options ([#6236](https://github.com/sveltejs/svelte/pull/6236))
+* Fix dynamic `href` values erroneously triggering a11y warnings ([#5990](https://github.com/sveltejs/svelte/issues/5990))
+* Fix scope leak when updating an `{#await}` block ([#6173](https://github.com/sveltejs/svelte/issues/6173))
+* Pass full markup source to `script`/`style` preprocessors ([#6169](https://github.com/sveltejs/svelte/pull/6169))
+* Fix `crossfade` types to mark `fallback` as optional ([#6201](https://github.com/sveltejs/svelte/pull/6201))
+* Add missing "context" typing to `SvelteComponent` constructor options ([#6236](https://github.com/sveltejs/svelte/pull/6236))
+* Don't automatically switch to `svg` namespace when in `foreign` namespace ([#6257](https://github.com/sveltejs/svelte/issues/6257))
 
 ## 3.37.0
 
