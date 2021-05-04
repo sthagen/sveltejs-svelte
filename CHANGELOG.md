@@ -1,5 +1,9 @@
 # Svelte changelog
 
+## 3.38.2
+
+* Revert hydration optimisation for the time being ([#6279](https://github.com/sveltejs/svelte/issues/6279))
+
 ## 3.38.1
 
 * Fix hydration regression ([#6274](https://github.com/sveltejs/svelte/issues/6274))
