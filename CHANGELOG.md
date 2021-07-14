@@ -21,6 +21,8 @@
 * Support `bind:group` in SSR ([#4621](https://github.com/sveltejs/svelte/pull/4621))
 * Add sourcemaps to html elements ([#6427](https://github.com/sveltejs/svelte/pull/6427))
 * Make `<script>` and `<style>` end tag parsing more robust ([#6511](https://github.com/sveltejs/svelte/pull/6511))
+* Make it possible to silence more warnings ([#5954](https://github.com/sveltejs/svelte/issues/5954))
+* Do not warn if module variables are not the only dependencies in reactive statements ([#5954](https://github.com/sveltejs/svelte/issues/5954))
 
 ## 3.38.3
 
