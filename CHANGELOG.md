@@ -1,5 +1,10 @@
 # Svelte changelog
 
+## Unreleased
+
+* Fix paths in generator JS sourcemaps to be relative ([#6598](https://github.com/sveltejs/svelte/pull/6598))
+* Fix overzealous warnings about `context="module"` variables not being reactive ([#6606](https://github.com/sveltejs/svelte/issues/6606))
+
 ## 3.41.0
 
 * Support `export { ... } from` syntax in components ([#2214](https://github.com/sveltejs/svelte/issues/2214))
