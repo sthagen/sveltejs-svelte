@@ -1,5 +1,11 @@
 # Svelte changelog
 
+## 3.42.4
+
+* Only apply optimized `src` attribute handling when in an `html` namespace ([#6575](https://github.com/sveltejs/svelte/issues/6575))
+* Fix styles for transitions and animations being attached to the wrong `document` in `<iframe>`s ([#6637](https://github.com/sveltejs/svelte/issues/6637))
+* Fix `<select>` with a `{...spread}` attribute that didn't provide a `value` key getting its value improperly unset ([#6675](https://github.com/sveltejs/svelte/issues/6675))
+
 ## 3.42.3
 
 * Add `BigInt` as a known global ([#6671](https://github.com/sveltejs/svelte/pull/6671))
