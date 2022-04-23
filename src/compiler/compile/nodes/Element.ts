@@ -7,22 +7,26 @@ import Transition from './Transition';
 import Animation from './Animation';
 import Action from './Action';
 import Class from './Class';
+import StyleDirective from './StyleDirective';
 import Text from './Text';
 import { namespaces } from '../../utils/namespaces';
 import map_children from './shared/map_children';
-import { dimensions } from '../../utils/patterns';
+import { dimensions, start_newline } from '../../utils/patterns';
 import fuzzymatch from '../../utils/fuzzymatch';
 import list from '../../utils/list';
 import Let from './Let';
 import TemplateScope from './shared/TemplateScope';
 import { INode } from './interfaces';
 import Component from '../Component';
+import Expression from './shared/Expression';
+import { string_literal } from '../utils/stringify';
+import { Literal } from 'estree';
 import compiler_warnings from '../compiler_warnings';
 import compiler_errors from '../compiler_errors';
 
 const svg = /^(?:altGlyph|altGlyphDef|altGlyphItem|animate|animateColor|animateMotion|animateTransform|circle|clipPath|color-profile|cursor|defs|desc|discard|ellipse|feBlend|feColorMatrix|feComponentTransfer|feComposite|feConvolveMatrix|feDiffuseLighting|feDisplacementMap|feDistantLight|feDropShadow|feFlood|feFuncA|feFuncB|feFuncG|feFuncR|feGaussianBlur|feImage|feMerge|feMergeNode|feMorphology|feOffset|fePointLight|feSpecularLighting|feSpotLight|feTile|feTurbulence|filter|font|font-face|font-face-format|font-face-name|font-face-src|font-face-uri|foreignObject|g|glyph|glyphRef|hatch|hatchpath|hkern|image|line|linearGradient|marker|mask|mesh|meshgradient|meshpatch|meshrow|metadata|missing-glyph|mpath|path|pattern|polygon|polyline|radialGradient|rect|set|solidcolor|stop|svg|switch|symbol|text|textPath|tref|tspan|unknown|use|view|vkern)$/;
 
-const aria_attributes = 'activedescendant atomic autocomplete busy checked colcount colindex colspan controls current describedby details disabled dropeffect errormessage expanded flowto grabbed haspopup hidden invalid keyshortcuts label labelledby level live modal multiline multiselectable orientation owns placeholder posinset pressed readonly relevant required roledescription rowcount rowindex rowspan selected setsize sort valuemax valuemin valuenow valuetext'.split(' ');
+const aria_attributes = 'activedescendant atomic autocomplete busy checked colcount colindex colspan controls current describedby description details disabled dropeffect errormessage expanded flowto grabbed haspopup hidden invalid keyshortcuts label labelledby level live modal multiline multiselectable orientation owns placeholder posinset pressed readonly relevant required roledescription rowcount rowindex rowspan selected setsize sort valuemax valuemin valuenow valuetext'.split(' ');
 const aria_attribute_set = new Set(aria_attributes);
 
 const aria_roles = 'alert alertdialog application article banner blockquote button caption cell checkbox code columnheader combobox complementary contentinfo definition deletion dialog directory document emphasis feed figure form generic graphics-document graphics-object graphics-symbol grid gridcell group heading img link list listbox listitem log main marquee math meter menu menubar menuitem menuitemcheckbox menuitemradio navigation none note option paragraph presentation progressbar radio radiogroup region row rowgroup rowheader scrollbar search searchbox separator slider spinbutton status strong subscript superscript switch tab table tablist tabpanel term textbox time timer toolbar tooltip tree treegrid treeitem'.split(' ');
@@ -70,6 +74,46 @@ const a11y_labelable = new Set([
 	'textarea'
 ]);
 
+const a11y_nested_implicit_semantics = new Map([
+	['header', 'banner'],
+	['footer', 'contentinfo']
+]);
+
+const a11y_implicit_semantics = new Map([
+	['a', 'link'],
+	['aside', 'complementary'],
+	['body', 'document'],
+	['datalist', 'listbox'],
+	['dd', 'definition'],
+	['dfn', 'term'],
+	['details', 'group'],
+	['dt', 'term'],
+	['fieldset', 'group'],
+	['form', 'form'],
+	['h1', 'heading'],
+	['h2', 'heading'],
+	['h3', 'heading'],
+	['h4', 'heading'],
+	['h5', 'heading'],
+	['h6', 'heading'],
+	['hr', 'separator'],
+	['li', 'listitem'],
+	['menu', 'list'],
+	['nav', 'navigation'],
+	['ol', 'list'],
+	['optgroup', 'group'],
+	['output', 'status'],
+	['progress', 'progressbar'],
+	['section', 'region'],
+	['summary', 'button'],
+	['tbody', 'rowgroup'],
+	['textarea', 'textbox'],
+	['tfoot', 'rowgroup'],
+	['thead', 'rowgroup'],
+	['tr', 'row'],
+	['ul', 'list']
+]);
+
 const invisible_elements = new Set(['meta', 'html', 'script', 'style']);
 
 const valid_modifiers = new Set([
@@ -98,6 +142,23 @@ const react_attributes = new Map([
 
 const attributes_to_compact_whitespace = ['class', 'style'];
 
+function is_parent(parent: INode, elements: string[]) {
+	let check = false;
+
+	while (parent) {
+		const parent_name = (parent as Element).name;
+		if (elements.includes(parent_name)) {
+			check = true;
+			break;
+		}
+		if (parent.type === 'Element') {
+			break;
+		}
+		parent = parent.parent;
+	}
+	return check;
+}
+
 function get_namespace(parent: Element, element: Element, explicit_namespace: string) {
 	const parent_element = parent.find_nearest(/^Element/);
 
@@ -123,6 +184,7 @@ export default class Element extends Node {
 	actions: Action[] = [];
 	bindings: Binding[] = [];
 	classes: Class[] = [];
+	styles: StyleDirective[] = [];
 	handlers: EventHandler[] = [];
 	lets: Let[] = [];
 	intro?: Transition = null;
@@ -131,14 +193,43 @@ export default class Element extends Node {
 	children: INode[];
 	namespace: string;
 	needs_manual_style_scoping: boolean;
+	tag_expr: Expression;
+
+	get is_dynamic_element() {
+		return this.name === 'svelte:element';
+	}
 
 	constructor(component: Component, parent: Node, scope: TemplateScope, info: any) {
 		super(component, parent, scope, info);
 		this.name = info.name;
 
+		if (info.name === 'svelte:element') {
+			if (typeof info.tag !== 'string') {
+				this.tag_expr = new Expression(component, this, scope, info.tag);
+			} else {
+				this.tag_expr = new Expression(component, this, scope, string_literal(info.tag) as Literal);
+			}
+		} else {
+			this.tag_expr = new Expression(component, this, scope, string_literal(this.name) as Literal);
+		}
+
 		this.namespace = get_namespace(parent as Element, this, component.namespace);
 
 		if (this.namespace !== namespaces.foreign) {
+			if (this.name === 'pre' || this.name === 'textarea') {
+				const first = info.children[0];
+				if (first && first.type === 'Text') {
+					// The leading newline character needs to be stripped because of a qirk,
+					// it is ignored by browsers if the tag and its contents are set through
+					// innerHTML (NOT if set through the innerHTML of the tag or dynamically).
+					// Therefore strip it here but add it back in the appropriate
+					// places if there's another newline afterwards.
+					// see https://html.spec.whatwg.org/multipage/syntax.html#element-restrictions
+					// see https://html.spec.whatwg.org/multipage/grouping-content.html#the-pre-element
+					first.data = first.data.replace(start_newline, '');
+				}
+			}
+
 			if (this.name === 'textarea') {
 				if (info.children.length > 0) {
 					const value_attribute = info.attributes.find(node => node.name === 'value');
@@ -204,6 +295,10 @@ export default class Element extends Node {
 
 				case 'Class':
 					this.classes.push(new Class(component, this, scope, node));
+					break;
+
+				case 'StyleDirective':
+					this.styles.push(new StyleDirective(component, this, scope, node));
 					break;
 
 				case 'EventHandler':
@@ -350,6 +445,22 @@ export default class Element extends Node {
 					// @ts-ignore
 					const match = fuzzymatch(value, aria_roles);
 					component.warn(attribute, compiler_warnings.a11y_unknown_role(value, match));
+				}
+
+				// no-redundant-roles
+				const has_redundant_role = value === a11y_implicit_semantics.get(this.name);
+
+				if (this.name === value || has_redundant_role) {
+					component.warn(attribute, compiler_warnings.a11y_no_redundant_roles(value));
+				}
+
+				// Footers and headers are special cases, and should not have redundant roles unless they are the children of sections or articles.
+				const is_parent_section_or_article = is_parent(this.parent, ['section', 'article']);
+				if (!is_parent_section_or_article) {
+					const has_nested_redundant_role = value === a11y_nested_implicit_semantics.get(this.name);
+					if (has_nested_redundant_role) {
+						component.warn(attribute, compiler_warnings.a11y_no_redundant_roles(value));
+					}
 				}
 			}
 

@@ -157,7 +157,7 @@ export function get_root_for_style(node: Node): ShadowRoot | Document {
 export function append_empty_stylesheet(node: Node) {
 	const style_element = element('style') as HTMLStyleElement;
 	append_stylesheet(get_root_for_style(node), style_element);
-	return style_element;
+	return style_element.sheet as CSSStyleSheet;
 }
 
 function append_stylesheet(node: ShadowRoot | Document, style: HTMLStyleElement) {
@@ -492,16 +492,17 @@ function find_comment(nodes, text, start) {
 	return nodes.length;
 }
 
-export function claim_html_tag(nodes) {
+
+export function claim_html_tag(nodes, is_svg: boolean) {
 	// find html opening tag
 	const start_index = find_comment(nodes, 'HTML_TAG_START', 0);
 	const end_index = find_comment(nodes, 'HTML_TAG_END', start_index);
 	if (start_index === end_index) {
-		return new HtmlTagHydration();
+		return new HtmlTagHydration(undefined, is_svg);
 	}
 
 	init_claim_info(nodes);
-	const html_tag_nodes = nodes.splice(start_index, end_index + 1);
+	const html_tag_nodes = nodes.splice(start_index, end_index - start_index + 1);
 	detach(html_tag_nodes[0]);
 	detach(html_tag_nodes[html_tag_nodes.length - 1]);
 	const claimed_nodes = html_tag_nodes.slice(1, html_tag_nodes.length - 1);
@@ -509,7 +510,7 @@ export function claim_html_tag(nodes) {
 		n.claim_order = nodes.claim_info.total_claimed;
 		nodes.claim_info.total_claimed += 1;
 	}
-	return new HtmlTagHydration(claimed_nodes);
+	return new HtmlTagHydration(claimed_nodes, is_svg);
 }
 
 export function set_data(text, data) {
@@ -530,7 +531,11 @@ export function set_input_type(input, type) {
 }
 
 export function set_style(node, key, value, important) {
-	node.style.setProperty(key, value, important ? 'important' : '');
+	if (value === null) {
+		node.style.removeProperty(key);
+	} else {
+		node.style.setProperty(key, value, important ? 'important' : '');
+	}
 }
 
 export function select_option(select, value) {
@@ -630,9 +635,9 @@ export function toggle_class(element, name, toggle) {
 	element.classList[toggle ? 'add' : 'remove'](name);
 }
 
-export function custom_event<T=any>(type: string, detail?: T, bubbles: boolean = false) {
+export function custom_event<T=any>(type: string, detail?: T, { bubbles = false, cancelable = false } = {}): CustomEvent<T> {
 	const e: CustomEvent<T> = document.createEvent('CustomEvent');
-	e.initCustomEvent(type, bubbles, false, detail);
+	e.initCustomEvent(type, bubbles, cancelable, detail);
 	return e;
 }
 
@@ -641,16 +646,18 @@ export function query_selector_all(selector: string, parent: HTMLElement = docum
 }
 
 export class HtmlTag {
+	private is_svg = false;
 	// parent for creating node
-	e: HTMLElement;
+	e: HTMLElement | SVGElement;
 	// html tag nodes
 	n: ChildNode[];
 	// target
-	t: HTMLElement;
+	t: HTMLElement | SVGElement;
 	// anchor
-	a: HTMLElement;
+	a: HTMLElement | SVGElement;
 
-	constructor() {
+	constructor(is_svg: boolean = false) {
+		this.is_svg = is_svg;
 		this.e = this.n = null;
 	}
 
@@ -658,9 +665,14 @@ export class HtmlTag {
 		this.h(html);
 	}
 
-	m(html: string, target: HTMLElement, anchor: HTMLElement = null) {
+	m(
+		html: string,
+		target: HTMLElement | SVGElement,
+		anchor: HTMLElement | SVGElement = null
+	) {
 		if (!this.e) {
-			this.e = element(target.nodeName as keyof HTMLElementTagNameMap);
+			if (this.is_svg) this.e = svg_element(target.nodeName as keyof SVGElementTagNameMap);
+			else this.e = element(target.nodeName as keyof HTMLElementTagNameMap);
 			this.t = target;
 			this.c(html);
 		}
@@ -694,8 +706,8 @@ export class HtmlTagHydration extends HtmlTag {
 	// hydration claimed nodes
 	l: ChildNode[] | void;
 
-	constructor(claimed_nodes?: ChildNode[]) {
-		super();
+	constructor(claimed_nodes?: ChildNode[], is_svg: boolean = false) {
+		super(is_svg);
 		this.e = this.n = null;
 		this.l = claimed_nodes;
 	}

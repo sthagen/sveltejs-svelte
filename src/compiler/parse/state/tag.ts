@@ -1,13 +1,13 @@
+import { Directive, DirectiveType, TemplateNode, Text } from '../../interfaces';
+import { extract_svelte_ignore } from '../../utils/extract_svelte_ignore';
+import fuzzymatch from '../../utils/fuzzymatch';
+import { is_void } from '../../utils/names';
+import parser_errors from '../errors';
+import { Parser } from '../index';
 import read_expression from '../read/expression';
 import read_script from '../read/script';
 import read_style from '../read/style';
-import { decode_character_references, closing_tag_omitted } from '../utils/html';
-import { is_void } from '../../utils/names';
-import { Parser } from '../index';
-import { Directive, DirectiveType, TemplateNode, Text } from '../../interfaces';
-import fuzzymatch from '../../utils/fuzzymatch';
-import { extract_svelte_ignore } from '../../utils/extract_svelte_ignore';
-import parser_errors from '../errors';
+import { closing_tag_omitted, decode_character_references } from '../utils/html';
 
 // eslint-disable-next-line no-useless-escape
 const valid_tag_name = /^\!?[a-zA-Z]{1,}:?[a-zA-Z0-9\-]*/;
@@ -19,7 +19,7 @@ const meta_tags = new Map([
 	['svelte:body', 'Body']
 ]);
 
-const valid_meta_tags = Array.from(meta_tags.keys()).concat('svelte:self', 'svelte:component', 'svelte:fragment');
+const valid_meta_tags = Array.from(meta_tags.keys()).concat('svelte:self', 'svelte:component', 'svelte:fragment', 'svelte:element');
 
 const specials = new Map([
 	[
@@ -41,6 +41,7 @@ const specials = new Map([
 const SELF = /^svelte:self(?=[\s/>])/;
 const COMPONENT = /^svelte:component(?=[\s/>])/;
 const SLOT = /^svelte:fragment(?=[\s/>])/;
+const ELEMENT = /^svelte:element(?=[\s/>])/;
 
 function parent_is_head(stack) {
 	let i = stack.length;
@@ -84,7 +85,7 @@ export default function tag(parser: Parser) {
 				parser.current().children.length
 			) {
 				parser.error(
-					parser_errors.invalid_element_content(slug, name), 
+					parser_errors.invalid_element_content(slug, name),
 					parser.current().children[0].start
 				);
 			}
@@ -169,7 +170,7 @@ export default function tag(parser: Parser) {
 
 	if (name === 'svelte:component') {
 		const index = element.attributes.findIndex(attr => attr.type === 'Attribute' && attr.name === 'this');
-		if (!~index) {
+		if (index === -1) {
 			parser.error(parser_errors.missing_component_definition, start);
 		}
 
@@ -179,6 +180,19 @@ export default function tag(parser: Parser) {
 		}
 
 		element.expression = definition.value[0].expression;
+	}
+
+	if (name === 'svelte:element') {
+		const index = element.attributes.findIndex(attr => attr.type === 'Attribute' && attr.name === 'this');
+		if (index === -1) {
+			parser.error(parser_errors.missing_element_definition, start);
+		}
+
+		const definition = element.attributes.splice(index, 1)[0];
+		if (definition.value === true) {
+			parser.error(parser_errors.invalid_element_definition, definition.start);
+		}
+		element.tag = definition.value[0].data || definition.value[0].expression;
 	}
 
 	// special cases – top-level <script> and <style>
@@ -247,6 +261,7 @@ function read_tag_name(parser: Parser) {
 	}
 
 	if (parser.read(COMPONENT)) return 'svelte:component';
+	if (parser.read(ELEMENT)) return 'svelte:element';
 
 	if (parser.read(SLOT)) return 'svelte:fragment';
 
@@ -258,7 +273,7 @@ function read_tag_name(parser: Parser) {
 		const match = fuzzymatch(name.slice(7), valid_meta_tags);
 
 		parser.error(
-			parser_errors.invalid_tag_name_svelte_element(valid_meta_tags, match), 
+			parser_errors.invalid_tag_name_svelte_element(valid_meta_tags, match),
 			start
 		);
 	}
@@ -365,9 +380,25 @@ function read_attribute(parser: Parser, unique_names: Set<string>) {
 			parser.error(parser_errors.invalid_ref_directive(directive_name), start);
 		}
 
-		if (value[0]) {
-			if ((value as any[]).length > 1 || value[0].type === 'Text') {
-				parser.error(parser_errors.invalid_directive_value, value[0].start);
+		if (type === 'StyleDirective') {
+			return {
+				start,
+				end,
+				type,
+				name: directive_name,
+				value
+			};
+		}
+
+		const first_value = value[0];
+		let expression = null;
+
+		if (first_value) {
+			const attribute_contains_text = (value as any[]).length > 1 || first_value.type === 'Text';
+			if (attribute_contains_text) {
+				parser.error(parser_errors.invalid_directive_value, first_value.start);
+			} else {
+				expression = first_value.expression;
 			}
 		}
 
@@ -377,7 +408,7 @@ function read_attribute(parser: Parser, unique_names: Set<string>) {
 			type,
 			name: directive_name,
 			modifiers,
-			expression: (value[0] && value[0].expression) || null
+			expression
 		};
 
 		if (type === 'Transition') {
@@ -386,6 +417,7 @@ function read_attribute(parser: Parser, unique_names: Set<string>) {
 			directive.outro = direction === 'out' || direction === 'transition';
 		}
 
+		// Directive name is expression, e.g. <p class:isRed />
 		if (!directive.expression && (type === 'Binding' || type === 'Class')) {
 			directive.expression = {
 				start: directive.start + colon_index + 1,
@@ -414,6 +446,7 @@ function get_directive_type(name: string): DirectiveType {
 	if (name === 'animate') return 'Animation';
 	if (name === 'bind') return 'Binding';
 	if (name === 'class') return 'Class';
+	if (name === 'style') return 'StyleDirective';
 	if (name === 'on') return 'EventHandler';
 	if (name === 'let') return 'Let';
 	if (name === 'ref') return 'Ref';
@@ -471,6 +504,8 @@ function read_sequence(parser: Parser, done: () => boolean): TemplateNode[] {
 		data: null
 	};
 
+	const chunks: TemplateNode[] = [];
+
 	function flush(end: number) {
 		if (current_chunk.raw) {
 			current_chunk.data = decode_character_references(current_chunk.raw);
@@ -478,8 +513,6 @@ function read_sequence(parser: Parser, done: () => boolean): TemplateNode[] {
 			chunks.push(current_chunk);
 		}
 	}
-
-	const chunks: TemplateNode[] = [];
 
 	while (parser.index < parser.template.length) {
 		const index = parser.index;
