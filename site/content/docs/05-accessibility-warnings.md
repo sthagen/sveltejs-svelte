@@ -41,6 +41,19 @@ Enforce that `autofocus` is not used on elements. Autofocusing elements can caus
 
 ---
 
+### `a11y-click-events-have-key-events`
+
+Enforce `on:click` is accompanied by at least one of the following: `onKeyUp`, `onKeyDown`, `onKeyPress`. Coding for the keyboard is important for users with physical disabilities who cannot use a mouse, AT compatibility, and screenreader users. 
+
+This does not apply for interactive or hidden elements.
+
+```sv
+<!-- A11y: visible, non-interactive elements with an on:click event must be accompanied by an on:keydown, on:keyup, or on:keypress event. -->
+<div on:click={() => {}} />
+```
+
+---
+
 ### `a11y-distracting-elements`
 
 Enforces that no distracting elements are used. Elements that can be visually distracting can cause accessibility issues with visually impaired users. Such elements are most likely deprecated, and should be avoided.
@@ -246,6 +259,17 @@ Some HTML elements have default ARIA roles. Giving these elements an ARIA role t
 ```sv
 <!-- A11y: <textarea> cannot have role 'listitem' -->
 <textarea role="listitem" />
+```
+
+---
+
+### `a11y-no-noninteractive-tabindex`
+
+Tab key navigation should be limited to elements on the page that can be interacted with.
+
+```sv
+<!-- A11y: not interactive element cannot have positive tabIndex value -->
+<div tabindex='0' />
 ```
 
 ---
