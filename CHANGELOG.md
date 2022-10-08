@@ -9,6 +9,7 @@
 * Supports SVG elements with `<svelte:element>`([#7613](https://github.com/sveltejs/svelte/issues/7613))
 * Warn user when binding on a `{...rest}` object in `{#each}` block ([#6860](https://github.com/sveltejs/svelte/issues/6860))
 * Supports `--style-props` for `<svelte:component>` ([#7461](https://github.com/sveltejs/svelte/issues/7461))
+* Supports `--style-props` for SVG components ([#7808](https://github.com/sveltejs/svelte/issues/7808))
 * Add a11y warnings:
 	* `a11y-no-noninteractive-tabindex`: check for tabindex on non-interactive elements ([#6693](https://github.com/sveltejs/svelte/pull/6693))
 	* `a11y-click-events-have-key-events`: check if click event is accompanied by key events ([#5073](https://github.com/sveltejs/svelte/pull/5073))
@@ -16,6 +17,10 @@
 * Supports custom element in `<svelte:element>` ([#7766](https://github.com/sveltejs/svelte/pull/7766))
 * Improve performance of custom element data setting in `<svelte:element>` ([#7869](https://github.com/sveltejs/svelte/pull/7869))
 * Supports nullish values for component event handlers ([#7568](https://github.com/sveltejs/svelte/issues/7568))
+* Better error message when specifying an invalid value for `<svelte:component this={...}>` ([#7550](https://github.com/sveltejs/svelte/issues/7550))
+* Fix to call component unmount if a component is mounted and then immediately unmounted ([#7817](https://github.com/sveltejs/svelte/issues/7817))
+* Fix false positive warnings about props binding in dev mode ([#4457](https://github.com/sveltejs/svelte/issues/4457))
+* Better error message when using logic blocks or tags in invalid place ([#7552](https://github.com/sveltejs/svelte/issues/7552))
 
 ## 3.50.1
 
