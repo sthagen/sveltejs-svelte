@@ -206,6 +206,7 @@ Additional conditions can be added with `{:else if expression}`, optionally endi
 {/if}
 ```
 
+(Blocks don't have to wrap elements, they can also wrap text within elements!)
 
 ### {#each ...}
 
@@ -748,6 +749,22 @@ Videos additionally have readonly `videoWidth` and `videoHeight` bindings.
 	bind:videoWidth
 	bind:videoHeight
 ></video>
+```
+
+##### Image element bindings
+
+---
+
+Image elements (`<img>`) have two readonly bindings:
+
+* `naturalWidth` (readonly) — the original width of the image, available after the image has loaded
+* `naturalHeight` (readonly) — the original height of the image, available after the image has loaded
+
+```sv
+<img
+	bind:naturalWidth
+	bind:naturalHeight
+></img>
 ```
 
 ##### Block-level element bindings
