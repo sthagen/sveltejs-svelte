@@ -1,5 +1,19 @@
 # svelte
 
+## 4.2.0
+
+### Minor Changes
+
+- feat: move `svelteHTML` from language-tools into core to load the correct `svelte/element` types ([#9070](https://github.com/sveltejs/svelte/pull/9070))
+
+## 4.1.2
+
+### Patch Changes
+
+- fix: allow child element with slot attribute within svelte:element ([#9038](https://github.com/sveltejs/svelte/pull/9038))
+
+- fix: Add data-\* to svg attributes ([#9036](https://github.com/sveltejs/svelte/pull/9036))
+
 ## 4.1.1
 
 ### Patch Changes
