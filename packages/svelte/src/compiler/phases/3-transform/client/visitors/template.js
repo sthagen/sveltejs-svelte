@@ -850,7 +850,14 @@ function serialize_inline_component(node, component_name, context) {
 					b.thunk(b.array(props_and_spreads.map((p) => (Array.isArray(p) ? b.object(p) : p))))
 			  );
 	/** @param {import('estree').Identifier} node_id */
-	let fn = (node_id) => b.call(component_name, node_id, props_expression);
+	let fn = (node_id) =>
+		b.call(
+			context.state.options.dev
+				? b.call('$.validate_component', b.id(component_name))
+				: component_name,
+			node_id,
+			props_expression
+		);
 
 	if (bind_this !== null) {
 		const prev = fn;
@@ -2227,19 +2234,34 @@ export const template_visitors = {
 			declarations.push(b.let(node.index, index));
 		}
 
-		context.state.after_update.push(
-			b.stmt(
-				b.call(
-					'$.each',
-					context.state.node,
-					each_node_meta.array_name ? each_node_meta.array_name : b.thunk(collection),
-					b.literal(each_type),
-					key_function,
-					b.arrow([b.id('$$anchor'), item, index], b.block(declarations.concat(children))),
-					else_block
+		if ((each_type & EACH_KEYED) !== 0) {
+			context.state.after_update.push(
+				b.stmt(
+					b.call(
+						'$.each_keyed',
+						context.state.node,
+						each_node_meta.array_name ? each_node_meta.array_name : b.thunk(collection),
+						b.literal(each_type),
+						key_function,
+						b.arrow([b.id('$$anchor'), item, index], b.block(declarations.concat(children))),
+						else_block
+					)
 				)
-			)
-		);
+			);
+		} else {
+			context.state.after_update.push(
+				b.stmt(
+					b.call(
+						'$.each_indexed',
+						context.state.node,
+						each_node_meta.array_name ? each_node_meta.array_name : b.thunk(collection),
+						b.literal(each_type),
+						b.arrow([b.id('$$anchor'), item, index], b.block(declarations.concat(children))),
+						else_block
+					)
+				)
+			);
+		}
 	},
 	IfBlock(node, context) {
 		context.state.template.push('<!>');
