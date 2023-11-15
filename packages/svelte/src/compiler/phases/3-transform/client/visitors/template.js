@@ -34,6 +34,7 @@ import {
 	EACH_ITEM_REACTIVE,
 	EACH_KEYED
 } from '../../../../../constants.js';
+import { regex_is_valid_identifier } from '../../../patterns.js';
 
 /**
  * Serializes each style directive into something like `$.style(element, style_property, value)`
@@ -72,6 +73,27 @@ function serialize_style_directives(style_directives, element_id, context, is_at
 			context.state.init.push(...values);
 		}
 	}
+}
+
+/**
+ * For unfortunate legacy reasons, directive names can look like this `use:a.b-c`
+ * This turns that string into a member expression
+ * @param {string} name
+ */
+function parse_directive_name(name) {
+	// this allow for accessing members of an object
+	const parts = name.split('.');
+	let part = /** @type {string} */ (parts.shift());
+
+	/** @type {import('estree').Identifier | import('estree').MemberExpression} */
+	let expression = b.id(part);
+
+	while ((part = /** @type {string} */ (parts.shift()))) {
+		const computed = !regex_is_valid_identifier.test(part);
+		expression = b.member(expression, computed ? b.literal(part) : b.id(part), computed);
+	}
+
+	return expression;
 }
 
 /**
@@ -710,7 +732,6 @@ function serialize_inline_component(node, component_name, context) {
 		} else if (attribute.type === 'SpreadAttribute') {
 			props_and_spreads.push(/** @type {import('estree').Expression} */ (context.visit(attribute)));
 		} else if (attribute.type === 'Attribute') {
-			if (attribute.name === 'slot') continue;
 			if (attribute.name.startsWith('--')) {
 				custom_css_props.push(
 					b.init(attribute.name, serialize_attribute_value(attribute.value, context)[1])
@@ -1677,7 +1698,16 @@ export const template_visitors = {
 				? b.literal(null)
 				: b.thunk(/** @type {import('estree').Expression} */ (visit(node.expression)));
 
-		state.init.push(b.stmt(b.call('$.animate', state.node, b.id(node.name), expression)));
+		state.init.push(
+			b.stmt(
+				b.call(
+					'$.animate',
+					state.node,
+					/** @type {import('estree').Expression} */ (visit(parse_directive_name(node.name))),
+					expression
+				)
+			)
+		);
 	},
 	ClassDirective(node, { state, next }) {
 		error(node, 'INTERNAL', 'Node should have been handled elsewhere');
@@ -1697,7 +1727,7 @@ export const template_visitors = {
 				b.call(
 					type,
 					state.node,
-					b.id(node.name),
+					/** @type {import('estree').Expression} */ (visit(parse_directive_name(node.name))),
 					expression,
 					node.modifiers.includes('global') ? b.true : b.false
 				)
@@ -1728,7 +1758,6 @@ export const template_visitors = {
 		const is_custom_element = is_custom_element_node(node);
 		let needs_input_reset = false;
 		let needs_content_reset = false;
-		let has_spread = false;
 
 		/** @type {import('#compiler').BindDirective | null} */
 		let value_binding = null;
@@ -1748,27 +1777,22 @@ export const template_visitors = {
 
 		for (const attribute of node.attributes) {
 			if (attribute.type === 'Attribute') {
-				if (is_event_attribute(attribute)) {
-					serialize_event_attribute(attribute, context);
-				} else {
-					attributes.push(attribute);
-					if (
-						(attribute.name === 'value' || attribute.name === 'checked') &&
-						!is_text_attribute(attribute)
-					) {
-						needs_input_reset = true;
-						needs_content_reset = true;
-					} else if (
-						attribute.name === 'contenteditable' &&
-						(attribute.value === true ||
-							(is_text_attribute(attribute) && attribute.value[0].data === 'true'))
-					) {
-						is_content_editable = true;
-					}
+				attributes.push(attribute);
+				if (
+					(attribute.name === 'value' || attribute.name === 'checked') &&
+					!is_text_attribute(attribute)
+				) {
+					needs_input_reset = true;
+					needs_content_reset = true;
+				} else if (
+					attribute.name === 'contenteditable' &&
+					(attribute.value === true ||
+						(is_text_attribute(attribute) && attribute.value[0].data === 'true'))
+				) {
+					is_content_editable = true;
 				}
 			} else if (attribute.type === 'SpreadAttribute') {
 				attributes.push(attribute);
-				has_spread = true;
 				needs_input_reset = true;
 				needs_content_reset = true;
 			} else if (attribute.type === 'ClassDirective') {
@@ -1829,7 +1853,7 @@ export const template_visitors = {
 
 		// Then do attributes
 		let is_attributes_reactive = false;
-		if (has_spread) {
+		if (node.metadata.has_spread) {
 			const spread_id = serialize_element_spread_attributes(attributes, context, node_id);
 			if (child_metadata.namespace !== 'foreign') {
 				add_select_to_spread_update(spread_id, node, context, node_id);
@@ -1837,6 +1861,11 @@ export const template_visitors = {
 			is_attributes_reactive = spread_id !== null;
 		} else {
 			for (const attribute of /** @type {import('#compiler').Attribute[]} */ (attributes)) {
+				if (is_event_attribute(attribute)) {
+					serialize_event_attribute(attribute, context);
+					continue;
+				}
+
 				if (needs_special_value_handling && attribute.name === 'value') {
 					serialize_element_special_value_attribute(node.name, node_id, attribute, context);
 					continue;
@@ -2419,7 +2448,13 @@ export const template_visitors = {
 		/** @type {import('estree').Expression[]} */
 		const args = [
 			state.node,
-			b.arrow(params, b.call(serialize_get_binding(b.id(node.name), state), ...params))
+			b.arrow(
+				params,
+				b.call(
+					/** @type {import('estree').Expression} */ (visit(parse_directive_name(node.name))),
+					...params
+				)
+			)
 		];
 
 		if (node.expression) {

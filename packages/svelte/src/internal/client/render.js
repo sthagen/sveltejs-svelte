@@ -4,6 +4,7 @@ import {
 	child,
 	clone_node,
 	create_element,
+	init_operations,
 	map_get,
 	map_set,
 	set_class_name
@@ -25,7 +26,9 @@ import {
 	EACH_IS_CONTROLLED,
 	EACH_INDEX_REACTIVE,
 	EACH_ITEM_REACTIVE,
-	EACH_IS_ANIMATED
+	EACH_IS_ANIMATED,
+	PassiveDelegatedEvents,
+	DelegatedEvents
 } from '../../constants.js';
 import {
 	create_fragment_from_html,
@@ -77,7 +80,6 @@ const all_registerd_events = new Set();
 
 /** @type {Set<(events: Array<string>) => void>} */
 const root_event_handles = new Set();
-const passive_delegated_events = new Set(['touchstart', 'touchmove', 'touchend']);
 
 /** @returns {Text} */
 function empty() {
@@ -2864,10 +2866,10 @@ export function spread_attributes(dom, prev, attrs, css_hash) {
 		if (prefix === '$$') continue;
 
 		if (prefix === 'on') {
-			// TODO delegate?
 			/** @type {{ capture?: true }} */
 			const opts = {};
 			let event_name = key.slice(2).toLowerCase();
+			const delegated = DelegatedEvents.includes(event_name);
 
 			if (
 				event_name.endsWith('capture') &&
@@ -2877,11 +2879,17 @@ export function spread_attributes(dom, prev, attrs, css_hash) {
 				event_name = event_name.slice(0, -7);
 				opts.capture = true;
 			}
-			if (prev?.[key]) {
+			if (!delegated && prev?.[key]) {
 				dom.removeEventListener(event_name, /** @type {any} */ (prev[key]), opts);
 			}
 			if (value != null) {
-				dom.addEventListener(event_name, value, opts);
+				if (!delegated) {
+					dom.addEventListener(event_name, value, opts);
+				} else {
+					// @ts-ignore
+					dom[`__${event_name}`] = value;
+					delegate([event_name]);
+				}
 			}
 		} else if (value == null) {
 			dom.removeAttribute(key);
@@ -3166,6 +3174,7 @@ export function createRoot(component, options) {
  * @returns {[Exports, () => void]}
  */
 export function mount(component, options) {
+	init_operations();
 	const registered_events = new Set();
 	const container = options.target;
 	const block = create_root_block(container, options.intro || false);
@@ -3231,7 +3240,7 @@ export function mount(component, options) {
 				container.addEventListener(
 					event_name,
 					bound_event_listener,
-					passive_delegated_events.has(event_name)
+					PassiveDelegatedEvents.includes(event_name)
 						? {
 								passive: true
 						  }
