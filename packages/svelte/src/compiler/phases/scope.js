@@ -3,11 +3,7 @@ import { walk } from 'zimmerframe';
 import { is_element_node } from './nodes.js';
 import * as b from '../utils/builders.js';
 import { error } from '../errors.js';
-import {
-	extract_identifiers,
-	extract_identifiers_from_expression,
-	get_callee_name
-} from '../utils/ast.js';
+import { extract_identifiers, extract_identifiers_from_expression } from '../utils/ast.js';
 import { Runes } from './constants.js';
 
 export class Scope {
@@ -668,15 +664,31 @@ export function set_scope(scopes) {
 
 /**
  * Returns the name of the rune if the given expression is a `CallExpression` using a rune.
- * @param {import('estree').Expression | null | undefined} node
+ * @param {import('estree').Node | null | undefined} node
  * @param {Scope} scope
  */
 export function get_rune(node, scope) {
-	const callee = get_callee_name(node);
-	if (callee === null || !Runes.includes(callee)) return null;
+	if (!node) return null;
+	if (node.type !== 'CallExpression') return null;
 
-	const binding = scope.get(callee);
+	let n = node.callee;
+
+	let joined = '';
+
+	while (n.type === 'MemberExpression') {
+		if (n.computed) return null;
+		if (n.property.type !== 'Identifier') return null;
+		joined = '.' + n.property.name + joined;
+		n = n.object;
+	}
+
+	if (n.type !== 'Identifier') return null;
+
+	joined = n.name + joined;
+	if (!Runes.includes(joined)) return null;
+
+	const binding = scope.get(n.name);
 	if (binding !== null) return null; // rune name, but references a variable or store
 
-	return callee;
+	return joined;
 }

@@ -35,6 +35,7 @@ import {
 	EACH_KEYED
 } from '../../../../../constants.js';
 import { regex_is_valid_identifier } from '../../../patterns.js';
+import { javascript_visitors_runes } from './javascript-runes.js';
 
 /**
  * Serializes each style directive into something like `$.style(element, style_property, value)`
@@ -1086,9 +1087,7 @@ function create_block(parent, name, nodes, context) {
 		/** @type {import('estree').Statement} */ (update).leadingComments = [
 			{
 				type: 'Block',
-				value: ` Update `,
-				// @ts-expect-error
-				has_trailing_newline: true
+				value: ` Update `
 			}
 		];
 	}
@@ -1106,9 +1105,7 @@ function create_block(parent, name, nodes, context) {
 		body[0].leadingComments = [
 			{
 				type: 'Block',
-				value: ` Init `,
-				// @ts-expect-error
-				has_trailing_newline: true
+				value: ` Init `
 			}
 		];
 	}
@@ -2921,5 +2918,6 @@ export const template_visitors = {
 			...context.state,
 			node: b.id('$.document')
 		});
-	}
+	},
+	CallExpression: javascript_visitors_runes.CallExpression
 };

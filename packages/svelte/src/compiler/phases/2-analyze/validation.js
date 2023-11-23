@@ -503,13 +503,19 @@ function validate_call_expression(node, scope, path) {
 		error(node, rune === '$derived' ? 'invalid-derived-location' : 'invalid-state-location');
 	}
 
-	if (rune === '$effect') {
+	if (rune === '$effect' || rune === '$effect.pre') {
 		if (parent.type !== 'ExpressionStatement') {
 			error(node, 'invalid-effect-location');
 		}
 
 		if (node.arguments.length !== 1) {
-			error(node, 'invalid-rune-args-length', '$effect', [1]);
+			error(node, 'invalid-rune-args-length', rune, [1]);
+		}
+	}
+
+	if (rune === '$effect.active') {
+		if (node.arguments.length !== 0) {
+			error(node, 'invalid-rune-args-length', '$effect.active', [0]);
 		}
 	}
 }
@@ -580,24 +586,19 @@ export const validation_runes_js = {
 			private_derived_state
 		});
 	},
-	NewExpression(node, context) {
-		const callee = node.callee;
-
-		const binding = callee.type === 'Identifier' ? context.state.scope.get(callee.name) : null;
-		const is_module = context.state.ast_type === 'module';
+	ClassDeclaration(node, context) {
 		// In modules, we allow top-level module scope only, in components, we allow the component scope,
 		// which is function_depth of 1. With the exception of `new class` which is also not allowed at
 		// component scope level either.
-		const allowed_depth = is_module ? 0 : 1;
+		const allowed_depth = context.state.ast_type === 'module' ? 0 : 1;
 
-		if (
-			(callee.type === 'ClassExpression' && context.state.scope.function_depth > 0) ||
-			(binding !== null &&
-				binding.initial !== null &&
-				binding.initial.type === 'ClassDeclaration' &&
-				binding.scope.function_depth > allowed_depth)
-		) {
-			warn(context.state.analysis.warnings, node, context.path, 'inline-new-class');
+		if (context.state.scope.function_depth > allowed_depth) {
+			warn(context.state.analysis.warnings, node, context.path, 'avoid-nested-class');
+		}
+	},
+	NewExpression(node, context) {
+		if (node.callee.type === 'ClassExpression' && context.state.scope.function_depth > 0) {
+			warn(context.state.analysis.warnings, node, context.path, 'avoid-inline-class');
 		}
 	}
 };
@@ -741,6 +742,8 @@ export const validation_runes = merge(validation, a11y_validators, {
 			}
 		}
 	},
+	// TODO this is a code smell. need to refactor this stuff
 	ClassBody: validation_runes_js.ClassBody,
+	ClassDeclaration: validation_runes_js.ClassDeclaration,
 	NewExpression: validation_runes_js.NewExpression
 });

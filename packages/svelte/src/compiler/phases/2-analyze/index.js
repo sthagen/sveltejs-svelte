@@ -5,7 +5,6 @@ import * as assert from '../../utils/assert.js';
 import {
 	extract_identifiers,
 	extract_paths,
-	get_callee_name,
 	is_event_attribute,
 	is_text_attribute,
 	object
@@ -268,11 +267,7 @@ export function analyze_component(root, options) {
 			!Runes.includes(name) ||
 			(declaration !== null &&
 				// const state = $state(0) is valid
-				!Runes.includes(
-					/** @type {string} */ (
-						get_callee_name(/** @type {import('estree').Expression} */ (declaration.initial))
-					)
-				) &&
+				get_rune(declaration.initial, instance.scope) === null &&
 				// allow `import { derived } from 'svelte/store'` in the same file as `const x = $derived(..)` because one is not a subscription to the other
 				!(
 					name === '$derived' &&
@@ -284,7 +279,11 @@ export function analyze_component(root, options) {
 				if (declaration === null && /[a-z]/.test(store_name[0])) {
 					error(references[0].node, 'illegal-global', name);
 				} else if (declaration !== null && Runes.includes(name)) {
-					warn(warnings, declaration.node, [], 'store-with-rune-name', store_name);
+					for (const { node, path } of references) {
+						if (path.at(-1)?.type === 'CallExpression') {
+							warn(warnings, node, [], 'store-with-rune-name', store_name);
+						}
+					}
 				}
 			}
 
@@ -302,6 +301,8 @@ export function analyze_component(root, options) {
 
 			const binding = instance.scope.declare(b.id(name), 'store_sub', 'synthetic');
 			binding.references = references;
+			instance.scope.references.set(name, references);
+			module.scope.references.delete(name);
 		}
 	}
 
