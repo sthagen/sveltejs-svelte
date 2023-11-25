@@ -899,7 +899,10 @@ function serialize_inline_component(node, component_name, context) {
 	if (bind_this !== null) {
 		const prev = fn;
 		const assignment = b.assignment('=', bind_this, b.id('$$value'));
-		const bind_this_id = bind_this;
+		const bind_this_id = /** @type {import('estree').Expression} */ (
+			// if expression is not an identifier, we know it can't be a signal
+			bind_this.type === 'Identifier' ? bind_this : undefined
+		);
 		fn = (node_id) =>
 			b.call(
 				'$.bind_this',
@@ -2279,12 +2282,6 @@ export const template_visitors = {
 				  )
 				: b.literal(null);
 
-		if (context.state.options.dev && key_function.type !== 'Literal') {
-			context.state.init.push(
-				b.stmt(b.call('$.validate_each_keys', b.thunk(collection), key_function))
-			);
-		}
-
 		if (node.index && each_node_meta.contains_group_binding) {
 			// We needed to create a unique identifier for the index above, but we want to use the
 			// original index name in the template, therefore create another binding
@@ -2292,6 +2289,12 @@ export const template_visitors = {
 		}
 
 		if ((each_type & EACH_KEYED) !== 0) {
+			if (context.state.options.dev && key_function.type !== 'Literal') {
+				context.state.init.push(
+					b.stmt(b.call('$.validate_each_keys', b.thunk(collection), key_function))
+				);
+			}
+
 			context.state.after_update.push(
 				b.stmt(
 					b.call(
@@ -2491,7 +2494,7 @@ export const template_visitors = {
 		next();
 	},
 	BindDirective(node, context) {
-		const { state, path } = context;
+		const { state, path, visit } = context;
 
 		/** @type {import('estree').Expression[]} */
 		const properties = [];
@@ -2622,9 +2625,16 @@ export const template_visitors = {
 				}
 
 				case 'this':
-					call_expr = b.call(`$.bind_this`, state.node, setter, node.expression);
+					call_expr = b.call(
+						`$.bind_this`,
+						state.node,
+						setter,
+						/** @type {import('estree').Expression} */ (
+							// if expression is not an identifier, we know it can't be a signal
+							node.expression.type === 'Identifier' ? node.expression : undefined
+						)
+					);
 					break;
-
 				case 'textContent':
 				case 'innerHTML':
 				case 'innerText':
