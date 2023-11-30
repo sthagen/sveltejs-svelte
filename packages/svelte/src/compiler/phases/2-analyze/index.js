@@ -892,6 +892,11 @@ const common_visitors = {
 		const parent = /** @type {import('estree').Node} */ (context.path.at(-1));
 		if (!is_reference(node, parent)) return;
 
+		if (node.name === '$$slots') {
+			context.state.analysis.uses_slots = true;
+			return;
+		}
+
 		const binding = context.state.scope.get(node.name);
 
 		// if no binding, means some global variable
@@ -1106,7 +1111,8 @@ function determine_element_spread_and_delegatable(node) {
 			has_spread = true;
 		} else if (
 			!has_action_or_bind &&
-			(attribute.type === 'BindDirective' || attribute.type === 'UseDirective')
+			((attribute.type === 'BindDirective' && attribute.name !== 'this') ||
+				attribute.type === 'UseDirective')
 		) {
 			has_action_or_bind = true;
 		}
