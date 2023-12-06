@@ -34,7 +34,6 @@ import {
 	untrack,
 	effect,
 	flushSync,
-	expose,
 	safe_not_equal,
 	current_block,
 	source,
@@ -51,7 +50,16 @@ import {
 	hydrate_block_anchor,
 	set_current_hydration_fragment
 } from './hydration.js';
-import { array_from, define_property, get_descriptor, get_descriptors, is_array } from './utils.js';
+import {
+	array_from,
+	define_property,
+	get_descriptor,
+	get_descriptors,
+	is_array,
+	object_assign,
+	object_entries,
+	object_keys
+} from './utils.js';
 import { is_promise } from '../common.js';
 import { bind_transition, trigger_transitions } from './transitions.js';
 
@@ -1193,10 +1201,7 @@ export function bind_prop(props, prop, value) {
 	/** @param {V | null} value */
 	const update = (value) => {
 		const current_props = unwrap(props);
-		const signal = expose(() => current_props[prop]);
-		if (is_signal(signal)) {
-			set(signal, value);
-		} else if (Object.getOwnPropertyDescriptor(current_props, prop)?.set !== undefined) {
+		if (get_descriptor(current_props, prop)?.set !== undefined) {
 			current_props[prop] = value;
 		}
 	};
@@ -2406,7 +2411,7 @@ function get_setters(element) {
  * @returns {Record<string, unknown>}
  */
 export function spread_attributes(dom, prev, attrs, lowercase_attributes, css_hash) {
-	const next = Object.assign({}, ...attrs);
+	const next = object_assign({}, ...attrs);
 	const has_hash = css_hash.length !== 0;
 	for (const key in prev) {
 		if (!(key in next)) {
@@ -2502,7 +2507,7 @@ export function spread_attributes(dom, prev, attrs, lowercase_attributes, css_ha
  */
 export function spread_dynamic_element_attributes(node, prev, attrs, css_hash) {
 	if (node.tagName.includes('-')) {
-		const next = Object.assign({}, ...attrs);
+		const next = object_assign({}, ...attrs);
 		if (prev !== null) {
 			for (const key in prev) {
 				if (!(key in next)) {
@@ -2670,7 +2675,7 @@ export function createRoot(component, options) {
 	const result =
 		/** @type {Exports & { $destroy: () => void; $set: (props: Partial<Props>) => void; }} */ ({
 			$set: (props) => {
-				for (const [prop, value] of Object.entries(props)) {
+				for (const [prop, value] of object_entries(props)) {
 					if (prop in _sources) {
 						set(_sources[prop], value);
 					} else {
@@ -2682,7 +2687,7 @@ export function createRoot(component, options) {
 			$destroy
 		});
 
-	for (const key of Object.keys(accessors || {})) {
+	for (const key of object_keys(accessors || {})) {
 		define_property(result, key, {
 			get() {
 				// @ts-expect-error TS doesn't know key exists on accessor

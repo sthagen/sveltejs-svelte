@@ -4,8 +4,6 @@ export {
 	set,
 	set_sync,
 	invalidate_inner_signals,
-	expose,
-	exposable,
 	source,
 	mutable_source,
 	derived,
@@ -47,7 +45,7 @@ export * from './client/each.js';
 export * from './client/render.js';
 export * from './client/validate.js';
 export { raf } from './client/timing.js';
-export { proxy, readonly } from './client/proxy/proxy.js';
+export { proxy, readonly, unstate } from './client/proxy/proxy.js';
 
 export { create_custom_element } from './client/custom-element.js';
 
