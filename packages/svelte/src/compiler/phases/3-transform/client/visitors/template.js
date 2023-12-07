@@ -227,36 +227,35 @@ function setup_select_synchronization(value_binding, context) {
 		}
 	}
 
-	const to_invalidate = context.state.analysis.runes
-		? b.empty
-		: b.stmt(
-				b.call(
-					'$.invalidate_inner_signals',
-					b.thunk(
-						b.block(
-							names.map((name) => {
-								const serialized = serialize_get_binding(b.id(name), context.state);
-								return b.stmt(serialized);
-							})
-						)
-					)
-				)
-		  );
-	context.state.init.push(
-		b.stmt(
-			b.call(
-				'$.invalidate_effect',
-				b.thunk(
-					b.block([
-						b.stmt(
-							/** @type {import('estree').Expression} */ (context.visit(value_binding.expression))
-						),
-						to_invalidate
-					])
+	if (!context.state.analysis.runes) {
+		const invalidator = b.call(
+			'$.invalidate_inner_signals',
+			b.thunk(
+				b.block(
+					names.map((name) => {
+						const serialized = serialize_get_binding(b.id(name), context.state);
+						return b.stmt(serialized);
+					})
 				)
 			)
-		)
-	);
+		);
+
+		context.state.init.push(
+			b.stmt(
+				b.call(
+					'$.invalidate_effect',
+					b.thunk(
+						b.block([
+							b.stmt(
+								/** @type {import('estree').Expression} */ (context.visit(value_binding.expression))
+							),
+							b.stmt(invalidator)
+						])
+					)
+				)
+			)
+		);
+	}
 }
 
 /**
@@ -783,13 +782,20 @@ function serialize_inline_component(node, component_name, context) {
 			if (attribute.metadata.dynamic) {
 				let arg = value;
 
-				const contains_call_expression =
+				// When we have a non-simple computation, anything other than an Identifier or Member expression,
+				// then there's a good chance it needs to be memoized to avoid over-firing when read within the
+				// child component.
+				const should_wrap_in_derived =
 					Array.isArray(attribute.value) &&
 					attribute.value.some((n) => {
-						return n.type === 'ExpressionTag' && n.metadata.contains_call_expression;
+						return (
+							n.type === 'ExpressionTag' &&
+							n.expression.type !== 'Identifier' &&
+							n.expression.type !== 'MemberExpression'
+						);
 					});
 
-				if (contains_call_expression) {
+				if (should_wrap_in_derived) {
 					const id = b.id(context.state.scope.generate(attribute.name));
 					context.state.init.push(b.var(id, b.call('$.derived', b.thunk(value))));
 					arg = b.call('$.get', id);
@@ -1761,7 +1767,9 @@ export const template_visitors = {
 				b.call(
 					'$.animate',
 					state.node,
-					/** @type {import('estree').Expression} */ (visit(parse_directive_name(node.name))),
+					b.thunk(
+						/** @type {import('estree').Expression} */ (visit(parse_directive_name(node.name)))
+					),
 					expression
 				)
 			)
@@ -1785,7 +1793,9 @@ export const template_visitors = {
 				b.call(
 					type,
 					state.node,
-					/** @type {import('estree').Expression} */ (visit(parse_directive_name(node.name))),
+					b.thunk(
+						/** @type {import('estree').Expression} */ (visit(parse_directive_name(node.name)))
+					),
 					expression,
 					node.modifiers.includes('global') ? b.true : b.false
 				)

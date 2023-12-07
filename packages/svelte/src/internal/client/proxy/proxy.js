@@ -3,7 +3,7 @@ import {
 	effect_active,
 	get,
 	set,
-	increment,
+	update,
 	source,
 	updating_derived,
 	UNINITIALIZED,
@@ -17,7 +17,7 @@ import {
 	object_keys
 } from '../utils.js';
 
-/** @typedef {{ s: Map<string | symbol, import('../types.js').SourceSignal<any>>; v: import('../types.js').SourceSignal<number>; a: boolean, i: boolean }} Metadata */
+/** @typedef {{ s: Map<string | symbol, import('../types.js').SourceSignal<any>>; v: import('../types.js').SourceSignal<number>; a: boolean, i: boolean, p: StateObject }} Metadata */
 /** @typedef {Record<string | symbol, any> & { [STATE_SYMBOL]: Metadata }} StateObject */
 
 export const STATE_SYMBOL = Symbol('$state');
@@ -35,15 +35,23 @@ const is_frozen = Object.isFrozen;
  * @returns {T}
  */
 export function proxy(value, immutable = true) {
-	if (typeof value === 'object' && value != null && !is_frozen(value) && !(STATE_SYMBOL in value)) {
+	if (typeof value === 'object' && value != null && !is_frozen(value)) {
+		if (STATE_SYMBOL in value) {
+			return /** @type {T} */ (value[STATE_SYMBOL].p);
+		}
+
 		const prototype = get_prototype_of(value);
 
 		// TODO handle Map and Set as well
 		if (prototype === object_prototype || prototype === array_prototype) {
-			define_property(value, STATE_SYMBOL, { value: init(value, immutable), writable: false });
+			const proxy = new Proxy(value, handler);
+			define_property(value, STATE_SYMBOL, {
+				value: init(value, proxy, immutable),
+				writable: false
+			});
 
 			// @ts-expect-error not sure how to fix this
-			return new Proxy(value, handler);
+			return proxy;
 		}
 	}
 
@@ -102,15 +110,17 @@ export function unstate(value) {
 
 /**
  * @param {StateObject} value
+ * @param {StateObject} proxy
  * @param {boolean} immutable
  * @returns {Metadata}
  */
-function init(value, immutable) {
+function init(value, proxy, immutable) {
 	return {
 		s: new Map(),
 		v: source(0),
 		a: is_array(value),
-		i: immutable
+		i: immutable,
+		p: proxy
 	};
 }
 
@@ -133,13 +143,13 @@ const handler = {
 		const s = metadata.s.get(prop);
 		if (s !== undefined) set(s, UNINITIALIZED);
 
-		if (prop in target) increment(metadata.v);
+		if (prop in target) update(metadata.v);
 
 		return delete target[prop];
 	},
 
 	get(target, prop, receiver) {
-		if (prop === READONLY_SYMBOL) return target[READONLY_SYMBOL];
+		if (DEV && prop === READONLY_SYMBOL) return target[READONLY_SYMBOL];
 
 		const metadata = target[STATE_SYMBOL];
 		let s = metadata.s.get(prop);
@@ -197,7 +207,7 @@ const handler = {
 	},
 
 	set(target, prop, value) {
-		if (prop === READONLY_SYMBOL) {
+		if (DEV && prop === READONLY_SYMBOL) {
 			target[READONLY_SYMBOL] = value;
 			return true;
 		}
@@ -214,7 +224,7 @@ const handler = {
 			}
 		}
 		if (not_has) {
-			increment(metadata.v);
+			update(metadata.v);
 		}
 		// @ts-ignore
 		target[prop] = value;

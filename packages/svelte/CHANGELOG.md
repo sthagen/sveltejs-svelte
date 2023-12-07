@@ -1,5 +1,55 @@
 # svelte
 
+## 5.0.0-next.22
+
+### Patch Changes
+
+- fix: handle event hoisting props referencing ([#9846](https://github.com/sveltejs/svelte/pull/9846))
+
+- fix: support dynamic transition functions ([#9844](https://github.com/sveltejs/svelte/pull/9844))
+
+- fix: ensure action function returns object ([#9848](https://github.com/sveltejs/svelte/pull/9848))
+
+## 5.0.0-next.21
+
+### Patch Changes
+
+- chore: refactor props handling ([#9826](https://github.com/sveltejs/svelte/pull/9826))
+
+- fix: improve each key animations ([#9842](https://github.com/sveltejs/svelte/pull/9842))
+
+- chore: avoid creating thunk for call expressions when appropriate ([#9841](https://github.com/sveltejs/svelte/pull/9841))
+
+- fix: improve signal consumer removal logic ([#9837](https://github.com/sveltejs/svelte/pull/9837))
+
+- fix: ensure computed props are wrapped in derived ([#9835](https://github.com/sveltejs/svelte/pull/9835))
+
+- fix: better handle unowned derived signals ([#9832](https://github.com/sveltejs/svelte/pull/9832))
+
+- fix: improve each block with animate ([#9839](https://github.com/sveltejs/svelte/pull/9839))
+
+- breaking: change `$inspect` API ([#9838](https://github.com/sveltejs/svelte/pull/9838))
+
+## 5.0.0-next.20
+
+### Patch Changes
+
+- fix: better readonly checks for proxies ([#9808](https://github.com/sveltejs/svelte/pull/9808))
+
+- fix: prevent infinite loops stemming from invalidation method ([#9811](https://github.com/sveltejs/svelte/pull/9811))
+
+- fix: improve non state referenced warning ([#9809](https://github.com/sveltejs/svelte/pull/9809))
+
+- fix: reuse existing proxy when object has multiple references ([#9821](https://github.com/sveltejs/svelte/pull/9821))
+
+- fix: improve consistency issues around binding invalidation ([#9810](https://github.com/sveltejs/svelte/pull/9810))
+
+- fix: tweak css nth regex ([#9806](https://github.com/sveltejs/svelte/pull/9806))
+
+- fix: adjust children snippet default type ([`dcdd64548`](https://github.com/sveltejs/svelte/commit/dcdd645480ab412eb563632e70801f4d61c1d787))
+
+- fix: correctly apply scope on component children ([#9824](https://github.com/sveltejs/svelte/pull/9824))
+
 ## 5.0.0-next.19
 
 ### Patch Changes

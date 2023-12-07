@@ -377,10 +377,7 @@ export function class_name(dom, value) {
  * @returns {void}
  */
 export function text_effect(dom, value) {
-	render_effect(() => {
-		const string = value();
-		text(dom, string);
-	});
+	render_effect(() => text(dom, value()));
 }
 
 /**
@@ -2089,49 +2086,49 @@ export function html(dom, get_value, svg) {
 /**
  * @template P
  * @param {HTMLElement} dom
- * @param {import('./types.js').TransitionFn<P | undefined>} transition_fn
+ * @param {() => import('./types.js').TransitionFn<P | undefined>} get_transition_fn
  * @param {(() => P) | null} props
  * @param {any} global
  * @returns {void}
  */
-export function transition(dom, transition_fn, props, global = false) {
-	bind_transition(dom, transition_fn, props, 'both', global);
+export function transition(dom, get_transition_fn, props, global = false) {
+	bind_transition(dom, get_transition_fn, props, 'both', global);
 }
 
 /**
  * @template P
  * @param {HTMLElement} dom
- * @param {import('./types.js').TransitionFn<P | undefined>} transition_fn
+ * @param {() => import('./types.js').TransitionFn<P | undefined>} get_transition_fn
  * @param {(() => P) | null} props
  * @returns {void}
  */
-export function animate(dom, transition_fn, props) {
-	bind_transition(dom, transition_fn, props, 'key', false);
+export function animate(dom, get_transition_fn, props) {
+	bind_transition(dom, get_transition_fn, props, 'key', false);
 }
 
 /**
  * @template P
  * @param {HTMLElement} dom
- * @param {import('./types.js').TransitionFn<P | undefined>} transition_fn
+ * @param {() => import('./types.js').TransitionFn<P | undefined>} get_transition_fn
  * @param {(() => P) | null} props
  * @param {any} global
  * @returns {void}
  */
-function in_fn(dom, transition_fn, props, global = false) {
-	bind_transition(dom, transition_fn, props, 'in', global);
+function in_fn(dom, get_transition_fn, props, global = false) {
+	bind_transition(dom, get_transition_fn, props, 'in', global);
 }
 export { in_fn as in };
 
 /**
  * @template P
  * @param {HTMLElement} dom
- * @param {import('./types.js').TransitionFn<P | undefined>} transition_fn
+ * @param {() => import('./types.js').TransitionFn<P | undefined>} get_transition_fn
  * @param {(() => P) | null} props
  * @param {any} global
  * @returns {void}
  */
-export function out(dom, transition_fn, props, global = false) {
-	bind_transition(dom, transition_fn, props, 'out', global);
+export function out(dom, get_transition_fn, props, global = false) {
+	bind_transition(dom, get_transition_fn, props, 'out', global);
 }
 
 /**
@@ -2151,7 +2148,7 @@ export function action(dom, action, value_fn) {
 			const value = value_fn();
 			untrack(() => {
 				if (payload === undefined) {
-					payload = action(dom, value);
+					payload = action(dom, value) || {};
 				} else {
 					const update = payload.update;
 					if (typeof update === 'function') {
@@ -2661,7 +2658,7 @@ export function createRoot(component, options) {
 			/** @param {any} value */
 			set(value) {
 				// @ts-expect-error TS doesn't know key exists on accessor
-				accessors[key] = value;
+				flushSync(() => (accessors[key] = value));
 			},
 			enumerable: true
 		});
