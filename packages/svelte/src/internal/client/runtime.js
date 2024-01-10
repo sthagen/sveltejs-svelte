@@ -38,6 +38,7 @@ let current_scheduler_mode = FLUSH_MICROTASK;
 // Used for handling scheduling
 let is_micro_task_queued = false;
 let is_task_queued = false;
+let is_raf_queued = false;
 // Used for $inspect
 export let is_batching_effect = false;
 
@@ -52,7 +53,7 @@ let current_queued_effects = [];
 /** @type {Array<() => void>} */
 let current_queued_tasks = [];
 /** @type {Array<() => void>} */
-let current_queued_microtasks = [];
+let current_raf_tasks = [];
 let flush_count = 0;
 // Handle signal reactivity tree dependencies and consumer
 
@@ -586,11 +587,6 @@ function flush_queued_effects(effects) {
 
 function process_microtask() {
 	is_micro_task_queued = false;
-	if (current_queued_microtasks.length > 0) {
-		const tasks = current_queued_microtasks.slice();
-		current_queued_microtasks = [];
-		run_all(tasks);
-	}
 	if (flush_count > 101) {
 		return;
 	}
@@ -637,6 +633,13 @@ function process_task() {
 	run_all(tasks);
 }
 
+function process_raf_task() {
+	is_raf_queued = false;
+	const tasks = current_raf_tasks.slice();
+	current_raf_tasks = [];
+	run_all(tasks);
+}
+
 /**
  * @param {() => void} fn
  * @returns {void}
@@ -653,12 +656,12 @@ export function schedule_task(fn) {
  * @param {() => void} fn
  * @returns {void}
  */
-export function schedule_microtask(fn) {
-	if (!is_micro_task_queued) {
-		is_micro_task_queued = true;
-		queueMicrotask(process_microtask);
+export function schedule_raf_task(fn) {
+	if (!is_raf_queued) {
+		is_raf_queued = true;
+		requestAnimationFrame(process_raf_task);
 	}
-	current_queued_microtasks.push(fn);
+	current_raf_tasks.push(fn);
 }
 
 /**
@@ -721,8 +724,8 @@ export function flushSync(fn) {
 		if (current_queued_pre_and_render_effects.length > 0 || effects.length > 0) {
 			flushSync();
 		}
-		if (is_micro_task_queued) {
-			process_microtask();
+		if (is_raf_queued) {
+			process_raf_task();
 		}
 		if (is_task_queued) {
 			process_task();
@@ -1009,10 +1012,11 @@ export function mutate_store(store, expression, new_value) {
 
 /**
  * @param {import('./types.js').ComputationSignal} signal
+ * @param {import('./types.js').ComputationSignal} root
  * @param {boolean} inert
  * @returns {void}
  */
-export function mark_subtree_inert(signal, inert) {
+export function mark_subtree_inert(signal, root, inert, visited_blocks = new Set()) {
 	const flags = signal.f;
 	const is_already_inert = (flags & INERT) !== 0;
 	if (is_already_inert !== inert) {
@@ -1022,22 +1026,28 @@ export function mark_subtree_inert(signal, inert) {
 		}
 		// Nested if block effects
 		const block = signal.b;
-		if (block !== null) {
+		if (block !== null && !visited_blocks.has(block)) {
+			visited_blocks.add(block);
 			const type = block.t;
 			if (type === IF_BLOCK) {
+				const condition_effect = block.e;
+				const root_block = root.b?.p;
+				if (condition_effect !== null && root_block?.t === IF_BLOCK) {
+					mark_subtree_inert(condition_effect, root, inert);
+				}
 				const consequent_effect = block.ce;
 				if (consequent_effect !== null) {
-					mark_subtree_inert(consequent_effect, inert);
+					mark_subtree_inert(consequent_effect, root, inert, visited_blocks);
 				}
 				const alternate_effect = block.ae;
 				if (alternate_effect !== null) {
-					mark_subtree_inert(alternate_effect, inert);
+					mark_subtree_inert(alternate_effect, root, inert, visited_blocks);
 				}
 			} else if (type === EACH_BLOCK) {
 				const items = block.v;
 				for (let { e: each_item_effect } of items) {
 					if (each_item_effect !== null) {
-						mark_subtree_inert(each_item_effect, inert);
+						mark_subtree_inert(each_item_effect, root, inert, visited_blocks);
 					}
 				}
 			}
@@ -1047,7 +1057,7 @@ export function mark_subtree_inert(signal, inert) {
 	if (references !== null) {
 		let i;
 		for (i = 0; i < references.length; i++) {
-			mark_subtree_inert(references[i], inert);
+			mark_subtree_inert(references[i], root, inert, visited_blocks);
 		}
 	}
 }

@@ -1,5 +1,41 @@
 # svelte
 
+## 5.0.0-next.32
+
+### Patch Changes
+
+- fix: improve outro behavior with transitions ([#10139](https://github.com/sveltejs/svelte/pull/10139))
+
+- chore: remove internal functions from `svelte/transition` exports ([#10132](https://github.com/sveltejs/svelte/pull/10132))
+
+- fix: further animation transition improvements ([#10138](https://github.com/sveltejs/svelte/pull/10138))
+
+- fix: improve animation transition heuristics ([#10119](https://github.com/sveltejs/svelte/pull/10119))
+
+## 5.0.0-next.31
+
+### Patch Changes
+
+- fix: infer `svg` namespace correctly ([#10027](https://github.com/sveltejs/svelte/pull/10027))
+
+- fix: keep intermediate number value representations ([`d171a39b0`](https://github.com/sveltejs/svelte/commit/d171a39b0ad97e2a05de1f38bc76a3d345e2b3d5))
+
+- feat: allow modifiying derived props ([#10080](https://github.com/sveltejs/svelte/pull/10080))
+
+- fix: improve signal consumer tracking behavior ([#10121](https://github.com/sveltejs/svelte/pull/10121))
+
+- fix: support async/await in destructuring assignments ([#9962](https://github.com/sveltejs/svelte/pull/9962))
+
+- fix: take into account member expressions when determining legacy reactive dependencies ([#10128](https://github.com/sveltejs/svelte/pull/10128))
+
+- fix: make `ComponentType` generic optional ([`14dbc1be1`](https://github.com/sveltejs/svelte/commit/14dbc1be1720ff69e6f3c407e43c9c0765b0c140))
+
+- fix: silence false positive state warning ([`dda4ad510`](https://github.com/sveltejs/svelte/commit/dda4ad510f1907a114a16227c3412eb00bd21738))
+
+- fix: ensure nested blocks are inert during outro transitions ([#10126](https://github.com/sveltejs/svelte/pull/10126))
+
+- fix: improve ssr template literal generation ([#10127](https://github.com/sveltejs/svelte/pull/10127))
+
 ## 5.0.0-next.30
 
 ### Patch Changes
