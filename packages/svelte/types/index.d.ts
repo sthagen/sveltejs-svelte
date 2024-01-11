@@ -514,7 +514,7 @@ declare module 'svelte/compiler' {
 	export function parse(source: string, options?: {
 		filename?: string | undefined;
 		modern?: boolean | undefined;
-	} | undefined): SvelteNode | LegacySvelteNode;
+	} | undefined): Root | LegacyRoot;
 	/**
 	 * @deprecated Replace this with `import { walk } from 'estree-walker'`
 	 * */
@@ -777,6 +777,13 @@ declare module 'svelte/compiler' {
 		name: string;
 		attributes: Array<LegacyAttributeLike>;
 		children: Array<LegacyElementLike>;
+	}
+
+	interface LegacyRoot extends BaseNode_1 {
+		html: LegacySvelteNode;
+		css?: any;
+		instance?: any;
+		module?: any;
 	}
 
 	interface LegacyAction extends BaseNode_1 {
@@ -2565,6 +2572,6 @@ declare function $props<T>(): T;
  */
 declare function $inspect<T extends any[]>(
 	...values: T
-): { with: (type: 'init' | 'update', ...values: T) => void };
+): { with: (fn: (type: 'init' | 'update', ...values: T) => void) => void };
 
 //# sourceMappingURL=index.d.ts.map
