@@ -17,8 +17,7 @@ import {
 	PROPS_IS_RUNES,
 	PROPS_IS_UPDATED
 } from '../../constants.js';
-import { readonly } from './proxy/readonly.js';
-import { READONLY_SYMBOL, STATE_SYMBOL, proxy, unstate } from './proxy/proxy.js';
+import { READONLY_SYMBOL, STATE_SYMBOL, proxy, readonly, unstate } from './proxy.js';
 import { EACH_BLOCK, IF_BLOCK } from './block.js';
 
 export const SOURCE = 1;
@@ -127,7 +126,7 @@ function is_runes(context) {
 }
 
 /**
- * @param {import("./proxy/proxy.js").StateObject} target
+ * @param {import('./types.js').ProxyStateObject} target
  * @param {string | symbol} prop
  * @param {any} receiver
  */
@@ -499,6 +498,7 @@ function destroy_references(signal) {
 			if ((reference.f & IS_EFFECT) !== 0) {
 				destroy_signal(reference);
 			} else {
+				destroy_references(reference);
 				remove_consumers(reference, 0);
 				reference.d = null;
 			}
@@ -824,6 +824,7 @@ export async function tick() {
 function update_derived(signal, force_schedule) {
 	const previous_updating_derived = updating_derived;
 	updating_derived = true;
+	destroy_references(signal);
 	const value = execute_signal_fn(signal);
 	updating_derived = previous_updating_derived;
 	const status = current_skip_consumer || (signal.f & UNOWNED) !== 0 ? DIRTY : CLEAN;
@@ -1305,8 +1306,8 @@ export function derived(init) {
 	signal.i = init;
 	signal.x = current_component_context;
 	signal.e = default_equals;
-	if (!is_unowned) {
-		push_reference(/** @type {import('./types.js').EffectSignal} */ (current_effect), signal);
+	if (current_consumer !== null) {
+		push_reference(current_consumer, signal);
 	}
 	return signal;
 }
@@ -1966,7 +1967,11 @@ function deep_read(value, visited = new Set()) {
 	if (typeof value === 'object' && value !== null && !visited.has(value)) {
 		visited.add(value);
 		for (let key in value) {
-			deep_read(value[key], visited);
+			try {
+				deep_read(value[key], visited);
+			} catch (e) {
+				// continue
+			}
 		}
 		const proto = Object.getPrototypeOf(value);
 		if (
@@ -1980,7 +1985,11 @@ function deep_read(value, visited = new Set()) {
 			for (let key in descriptors) {
 				const get = descriptors[key].get;
 				if (get) {
-					get.call(value);
+					try {
+						get.call(value);
+					} catch (e) {
+						// continue
+					}
 				}
 			}
 		}
@@ -2120,9 +2129,9 @@ if (DEV) {
 
 /**
  * Expects a value that was wrapped with `freeze` and makes it frozen.
- * @template {import('./proxy/proxy.js').StateObject} T
+ * @template T
  * @param {T} value
- * @returns {Readonly<Record<string | symbol, any>>}
+ * @returns {Readonly<T>}
  */
 export function freeze(value) {
 	if (typeof value === 'object' && value != null && !is_frozen(value)) {
