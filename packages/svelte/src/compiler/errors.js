@@ -88,7 +88,9 @@ const parse = {
 	'illegal-subscription': () => `Cannot reference store value inside <script context="module">`,
 	'duplicate-style-element': () => `A component can have a single top-level <style> element`,
 	'duplicate-script-element': () =>
-		`A component can have a single top-level <script> element and/or a single top-level <script context="module"> element`
+		`A component can have a single top-level <script> element and/or a single top-level <script context="module"> element`,
+	'invalid-render-expression': () => 'expected an identifier followed by (...)',
+	'invalid-render-arguments': () => 'expected at most one argument'
 };
 
 /** @satisfies {Errors} */
@@ -171,10 +173,9 @@ const runes = {
 		`$props() assignment must not contain nested properties or computed keys`,
 	'invalid-props-location': () =>
 		`$props() can only be used at the top level of components as a variable declaration initializer`,
-	'invalid-derived-location': () =>
-		`$derived() can only be used as a variable declaration initializer or a class field`,
-	'invalid-state-location': () =>
-		`$state() can only be used as a variable declaration initializer or a class field`,
+	/** @param {string} rune */
+	'invalid-state-location': (rune) =>
+		`${rune}(...) can only be used as a variable declaration initializer or a class field`,
 	'invalid-effect-location': () => `$effect() can only be used as an expression statement`,
 	/**
 	 * @param {boolean} is_binding
@@ -509,7 +510,7 @@ export class CompileError extends Error {
 }
 
 /**
- * @template {keyof typeof errors} T
+ * @template {Exclude<keyof typeof errors, 'TODO'>} T
  * @param {NodeLike | number | null} node
  * @param {T} code
  * @param  {Parameters<typeof errors[T]>} args

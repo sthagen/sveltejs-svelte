@@ -20,7 +20,7 @@ import { warn } from '../../warnings.js';
 import check_graph_for_cycles from './utils/check_graph_for_cycles.js';
 import { regex_starts_with_newline } from '../patterns.js';
 import { create_attribute, is_element_node } from '../nodes.js';
-import { DelegatedEvents } from '../../../constants.js';
+import { DelegatedEvents, namespace_svg } from '../../../constants.js';
 import { should_proxy_or_freeze } from '../3-transform/client/utils.js';
 
 /**
@@ -678,7 +678,13 @@ const runes_scope_js_tweaker = {
 		const callee = node.init.callee;
 		if (callee.type !== 'Identifier' && callee.type !== 'MemberExpression') return;
 
-		if (rune !== '$state' && rune !== '$state.frozen' && rune !== '$derived') return;
+		if (
+			rune !== '$state' &&
+			rune !== '$state.frozen' &&
+			rune !== '$derived' &&
+			rune !== '$derived.call'
+		)
+			return;
 
 		for (const path of extract_paths(node.id)) {
 			// @ts-ignore this fails in CI for some insane reason
@@ -708,7 +714,13 @@ const runes_scope_tweaker = {
 		const callee = init.callee;
 		if (callee.type !== 'Identifier' && callee.type !== 'MemberExpression') return;
 
-		if (rune !== '$state' && rune !== '$state.frozen' && rune !== '$derived' && rune !== '$props')
+		if (
+			rune !== '$state' &&
+			rune !== '$state.frozen' &&
+			rune !== '$derived' &&
+			rune !== '$derived.call' &&
+			rune !== '$props'
+		)
 			return;
 
 		for (const path of extract_paths(node.id)) {
@@ -719,7 +731,7 @@ const runes_scope_tweaker = {
 					? 'state'
 					: rune === '$state.frozen'
 						? 'frozen_state'
-						: rune === '$derived'
+						: rune === '$derived' || rune === '$derived.call'
 							? 'derived'
 							: path.is_rest
 								? 'rest_prop'
@@ -1092,8 +1104,47 @@ const common_visitors = {
 
 		context.state.analysis.elements.push(node);
 	},
-	SvelteElement(node, { state }) {
-		state.analysis.elements.push(node);
+	SvelteElement(node, context) {
+		context.state.analysis.elements.push(node);
+
+		if (
+			context.state.options.namespace !== 'foreign' &&
+			node.tag.type === 'Literal' &&
+			typeof node.tag.value === 'string' &&
+			SVGElements.includes(node.tag.value)
+		) {
+			node.metadata.svg = true;
+			return;
+		}
+
+		for (const attribute of node.attributes) {
+			if (attribute.type === 'Attribute') {
+				if (attribute.name === 'xmlns' && is_text_attribute(attribute)) {
+					node.metadata.svg = attribute.value[0].data === namespace_svg;
+					return;
+				}
+			}
+		}
+
+		for (let i = context.path.length - 1; i >= 0; i--) {
+			const ancestor = context.path[i];
+			if (
+				ancestor.type === 'Component' ||
+				ancestor.type === 'SvelteComponent' ||
+				ancestor.type === 'SvelteFragment' ||
+				ancestor.type === 'SnippetBlock'
+			) {
+				// Inside a slot or a snippet -> this resets the namespace, so we can't determine it
+				return;
+			}
+			if (ancestor.type === 'SvelteElement' || ancestor.type === 'RegularElement') {
+				node.metadata.svg =
+					ancestor.type === 'RegularElement' && ancestor.name === 'foreignObject'
+						? false
+						: ancestor.metadata.svg;
+				return;
+			}
+		}
 	}
 };
 
