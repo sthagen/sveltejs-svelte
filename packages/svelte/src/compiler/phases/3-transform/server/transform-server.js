@@ -1340,12 +1340,16 @@ const template_visitors = {
 			b.block(each)
 		);
 		if (node.fallback) {
+			const fallback_stmts = create_block(node, node.fallback.nodes, context);
+			fallback_stmts.unshift(
+				b.stmt(b.assignment('+=', b.id('$$payload.out'), b.literal('<!--ssr:each_else-->')))
+			);
 			state.template.push(
 				t_statement(
 					b.if(
 						b.binary('!==', b.member(array_id, b.id('length')), b.literal(0)),
 						for_loop,
-						b.block(create_block(node, node.fallback.nodes, context))
+						b.block(fallback_stmts)
 					)
 				)
 			);
@@ -1572,6 +1576,9 @@ const template_visitors = {
 		/** @type {import('estree').Expression[]} */
 		const spreads = [];
 
+		/** @type {import('estree').ExpressionStatement[]} */
+		const lets = [];
+
 		/** @type {import('estree').Expression} */
 		let expression = b.member_id('$$props.children');
 
@@ -1582,15 +1589,20 @@ const template_visitors = {
 				const value = serialize_attribute_value(attribute.value, context);
 				if (attribute.name === 'name') {
 					expression = b.member(b.member_id('$$props.$$slots'), value, true, true);
-				} else {
+				} else if (attribute.name !== 'slot') {
 					if (attribute.metadata.dynamic) {
 						props.push(b.get(attribute.name, [b.return(value)]));
 					} else {
 						props.push(b.init(attribute.name, value));
 					}
 				}
+			} else if (attribute.type === 'LetDirective') {
+				lets.push(/** @type {import('estree').ExpressionStatement} */ (context.visit(attribute)));
 			}
 		}
+
+		// Let bindings first, they can be used on attributes
+		context.state.init.push(...lets);
 
 		const props_expression =
 			spreads.length === 0

@@ -1,5 +1,25 @@
 # svelte
 
+## 5.0.0-next.48
+
+### Patch Changes
+
+- chore: bump zimmerframe to fix bugs introduced in previous version ([#10405](https://github.com/sveltejs/svelte/pull/10405))
+
+## 5.0.0-next.47
+
+### Patch Changes
+
+- chore: bump zimmerframe to resolve AST-traversal-related bugs ([`b63ab91c7b92ecec6e7e939d6d509fc3008cf048`](https://github.com/sveltejs/svelte/commit/b63ab91c7b92ecec6e7e939d6d509fc3008cf048))
+
+## 5.0.0-next.46
+
+### Patch Changes
+
+- fix: allow `let:` directives on slot elements ([#10391](https://github.com/sveltejs/svelte/pull/10391))
+
+- fix: repair each block length mismatches during hydration ([#10398](https://github.com/sveltejs/svelte/pull/10398))
+
 ## 5.0.0-next.45
 
 ### Patch Changes
