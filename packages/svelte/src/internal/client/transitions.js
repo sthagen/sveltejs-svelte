@@ -10,8 +10,7 @@ import {
 	ROOT_BLOCK
 } from './block.js';
 import { destroy_each_item_block, get_first_element } from './each.js';
-import { append_child } from './operations.js';
-import { empty } from './render.js';
+import { append_child, empty } from './operations.js';
 import {
 	current_block,
 	current_effect,
@@ -650,12 +649,16 @@ export function trigger_transitions(transitions, target_direction, from) {
 			mark_subtree_inert(effect, false);
 		} else if (target_direction === 'key') {
 			if (direction === 'key') {
-				transition.p = transition.i(/** @type {DOMRect} */ (from));
+				if (!transition.p) {
+					transition.p = transition.i(/** @type {DOMRect} */ (from));
+				}
 				transition.in();
 			}
 		} else {
 			if (direction === 'out' || direction === 'both') {
-				transition.p = transition.i();
+				if (!transition.p) {
+					transition.p = transition.i();
+				}
 				outros.push(transition.o);
 			}
 			transition.d.inert = true;
