@@ -1,5 +1,33 @@
 # svelte
 
+## 5.0.0-next.57
+
+### Patch Changes
+
+- fix: correctly scope CSS selectors with descendant combinators ([#10490](https://github.com/sveltejs/svelte/pull/10490))
+
+- feat: implement support for `:is(...)` and `:where(...)` ([#10490](https://github.com/sveltejs/svelte/pull/10490))
+
+- chore: treeshake unused store subscriptions in SSR mode ([#10506](https://github.com/sveltejs/svelte/pull/10506))
+
+- fix: warn against accidental global event referenced ([#10442](https://github.com/sveltejs/svelte/pull/10442))
+
+- fix: improve bind:this support for each blocks ([#10510](https://github.com/sveltejs/svelte/pull/10510))
+
+- feat: implement nested CSS support ([#10490](https://github.com/sveltejs/svelte/pull/10490))
+
+- breaking: encapsulate/remove selectors inside `:is(...)` and `:where(...)` ([#10490](https://github.com/sveltejs/svelte/pull/10490))
+
+## 5.0.0-next.56
+
+### Patch Changes
+
+- feat: add hydrate method, make hydration treeshakeable ([#10497](https://github.com/sveltejs/svelte/pull/10497))
+
+- fix: makes keyed each blocks consistent between dev and prod ([#10500](https://github.com/sveltejs/svelte/pull/10500))
+
+- fix: subscribe to stores in `transition`,`animation`,`use` directives ([#10481](https://github.com/sveltejs/svelte/pull/10481))
+
 ## 5.0.0-next.55
 
 ### Patch Changes
