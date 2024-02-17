@@ -2097,7 +2097,6 @@ export function server_component(analysis, options) {
 		instance.body.unshift(b.const('$$store_subs', b.object([])));
 		template.body.push(b.stmt(b.call('$.unsubscribe_stores', b.id('$$store_subs'))));
 	}
-
 	// Propagate values of bound props upwards if they're undefined in the parent and have a value.
 	// Don't do this as part of the props retrieval because people could eagerly mutate the prop in the instance script.
 	/** @type {import('estree').Property[]} */
