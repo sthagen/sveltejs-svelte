@@ -225,28 +225,24 @@ export function client_component(source, analysis, options) {
 
 	// Bind static exports to props so that people can access them with bind:x
 	const static_bindings = analysis.exports.map(({ name, alias }) => {
-		const binding = analysis.instance.scope.get(name);
 		return b.stmt(
 			b.call(
 				'$.bind_prop',
 				b.id('$$props'),
 				b.literal(alias ?? name),
-				binding?.kind === 'state' || binding?.kind === 'frozen_state'
-					? b.call('$.get', b.id(name))
-					: b.id(name)
+				serialize_get_binding(b.id(name), instance_state)
 			)
 		);
 	});
 
 	const properties = analysis.exports.map(({ name, alias }) => {
-		const binding = analysis.instance.scope.get(name);
-		const is_source = binding !== null && is_state_source(binding, state);
+		const expression = serialize_get_binding(b.id(name), instance_state);
 
-		if (is_source || options.dev) {
-			return b.get(alias ?? name, [b.return(is_source ? b.call('$.get', b.id(name)) : b.id(name))]);
+		if (expression.type === 'Identifier' && !options.dev) {
+			return b.init(alias ?? name, expression);
 		}
 
-		return b.init(alias ?? name, b.id(name));
+		return b.get(alias ?? name, [b.return(expression)]);
 	});
 
 	if (analysis.accessors) {
@@ -262,8 +258,11 @@ export function client_component(source, analysis, options) {
 		}
 	}
 
+	const push_args = [b.id('$$props'), b.literal(analysis.runes)];
+	if (options.dev) push_args.push(b.id(analysis.name));
+
 	const component_block = b.block([
-		b.stmt(b.call('$.push', b.id('$$props'), b.literal(analysis.runes))),
+		b.stmt(b.call('$.push', ...push_args)),
 		...store_setup,
 		...legacy_reactive_declarations,
 		...group_binding_declarations,
@@ -342,6 +341,27 @@ export function client_component(source, analysis, options) {
 			)
 		)
 	];
+
+	if (options.dev) {
+		if (options.filename) {
+			let filename = options.filename;
+			if (/(\/|\w:)/.test(options.filename)) {
+				// filename is absolute — truncate it
+				const parts = filename.split(/[/\\]/);
+				filename = parts.length > 3 ? ['...', ...parts.slice(-3)].join('/') : filename;
+			}
+
+			// add `App.filename = 'App.svelte'` so that we can print useful messages later
+			body.push(
+				b.stmt(
+					b.assignment('=', b.member(b.id(analysis.name), b.id('filename')), b.literal(filename))
+				)
+			);
+		}
+
+		body.unshift(b.stmt(b.call(b.id('$.mark_module_start'), b.id(analysis.name))));
+		body.push(b.stmt(b.call(b.id('$.mark_module_end'))));
+	}
 
 	if (options.discloseVersion) {
 		body.unshift(b.imports([], 'svelte/internal/disclose-version'));

@@ -17,7 +17,7 @@ import {
 	PROPS_IS_RUNES,
 	PROPS_IS_UPDATED
 } from '../../constants.js';
-import { READONLY_SYMBOL, STATE_SYMBOL, proxy, readonly, unstate } from './proxy.js';
+import { STATE_SYMBOL, unstate } from './proxy.js';
 import { EACH_BLOCK, IF_BLOCK } from './block.js';
 
 export const SOURCE = 1;
@@ -126,11 +126,14 @@ function is_runes(context) {
  */
 export function batch_inspect(target, prop, receiver) {
 	const value = Reflect.get(target, prop, receiver);
+	/**
+	 * @this {any}
+	 */
 	return function () {
 		const previously_batching_effect = is_batching_effect;
 		is_batching_effect = true;
 		try {
-			return Reflect.apply(value, receiver, arguments);
+			return Reflect.apply(value, this, arguments);
 		} finally {
 			is_batching_effect = previously_batching_effect;
 			if (last_inspected_signal !== null) {
@@ -167,6 +170,8 @@ function create_source_signal(flags, value) {
 			f: flags,
 			// value
 			v: value,
+			// write version
+			w: 0,
 			// this is for DEV only
 			inspect: new Set()
 		};
@@ -179,7 +184,9 @@ function create_source_signal(flags, value) {
 		// flags
 		f: flags,
 		// value
-		v: value
+		v: value,
+		// write version
+		w: 0
 	};
 }
 
@@ -211,6 +218,8 @@ function create_computation_signal(flags, value, block) {
 			r: null,
 			// value
 			v: value,
+			// write version
+			w: 0,
 			// context: We can remove this if we get rid of beforeUpdate/afterUpdate
 			x: null,
 			// destroy
@@ -239,6 +248,8 @@ function create_computation_signal(flags, value, block) {
 		r: null,
 		// value
 		v: value,
+		// write version
+		w: 0,
 		// context: We can remove this if we get rid of beforeUpdate/afterUpdate
 		x: null,
 		// destroy
@@ -295,6 +306,17 @@ function is_signal_dirty(signal) {
 					} else {
 						return true;
 					}
+				}
+				// If we're workig with an unowned derived signal, then we need to check
+				// if our dependency write version is higher. If is is then we can assume
+				// that state has changed to a newer version and thus this unowned signal
+				// is also dirty.
+				const is_unowned = (flags & UNOWNED) !== 0;
+				const write_version = signal.w;
+				const dep_write_version = dependency.w;
+				if (is_unowned && dep_write_version > write_version) {
+					signal.w = dep_write_version;
+					return true;
 				}
 			}
 		}
@@ -824,7 +846,10 @@ function update_derived(signal, force_schedule) {
 	destroy_references(signal);
 	const value = execute_signal_fn(signal);
 	updating_derived = previous_updating_derived;
-	const status = current_skip_consumer || (signal.f & UNOWNED) !== 0 ? DIRTY : CLEAN;
+	const status =
+		(current_skip_consumer || (signal.f & UNOWNED) !== 0) && signal.d !== null
+			? MAYBE_DIRTY
+			: CLEAN;
 	set_signal_status(signal, status);
 	const equals = /** @type {import('./types.js').EqualsFunctions} */ (signal.e);
 	if (!equals(value, signal.v)) {
@@ -1152,18 +1177,18 @@ function mark_signal_consumers(signal, to_status, force_schedule) {
 			const consumer = consumers[i];
 			const flags = consumer.f;
 			const unowned = (flags & UNOWNED) !== 0;
-			const dirty = (flags & DIRTY) !== 0;
 			// We skip any effects that are already dirty (but not unowned). Additionally, we also
 			// skip if the consumer is the same as the current effect (except if we're not in runes or we
 			// are in force schedule mode).
-			if ((dirty && !unowned) || ((!force_schedule || !runes) && consumer === current_effect)) {
+			if ((!force_schedule || !runes) && consumer === current_effect) {
 				continue;
 			}
 			set_signal_status(consumer, to_status);
 			// If the signal is not clean, then skip over it – with the exception of unowned signals that
-			// are already dirty. Unowned signals might be dirty because they are not captured as part of an
+			// are already maybe dirty. Unowned signals might be dirty because they are not captured as part of an
 			// effect.
-			if ((flags & CLEAN) !== 0 || (dirty && unowned)) {
+			const maybe_dirty = (flags & MAYBE_DIRTY) !== 0;
+			if ((flags & CLEAN) !== 0 || (maybe_dirty && unowned)) {
 				if ((consumer.f & IS_EFFECT) !== 0) {
 					schedule_effect(/** @type {import('./types.js').EffectSignal} */ (consumer), false);
 				} else {
@@ -1202,6 +1227,8 @@ export function set_signal_value(signal, value) {
 		!(/** @type {import('./types.js').EqualsFunctions} */ (signal.e)(value, signal.v))
 	) {
 		signal.v = value;
+		// Increment write version so that unowned signals can properly track dirtyness
+		signal.w++;
 		// If the current signal is running for the first time, it won't have any
 		// consumers as we only allocate and assign the consumers after the signal
 		// has fully executed. So in the case of ensuring it registers the consumer
@@ -1281,7 +1308,6 @@ export function derived(init) {
 		create_computation_signal(flags | CLEAN, UNINITIALIZED, current_block)
 	);
 	signal.i = init;
-	bind_signal_to_component_context(signal);
 	signal.e = default_equals;
 	if (current_consumer !== null) {
 		push_reference(current_consumer, signal);
@@ -1308,26 +1334,7 @@ export function derived_safe_equal(init) {
  */
 /*#__NO_SIDE_EFFECTS__*/
 export function source(initial_value) {
-	const source = create_source_signal(SOURCE | CLEAN, initial_value);
-	bind_signal_to_component_context(source);
-	return source;
-}
-
-/**
- * This function binds a signal to the component context, so that we can fire
- * beforeUpdate/afterUpdate callbacks at the correct time etc
- * @param {import('./types.js').Signal} signal
- */
-function bind_signal_to_component_context(signal) {
-	if (current_component_context === null || !current_component_context.r) return;
-
-	const signals = current_component_context.d;
-
-	if (signals) {
-		signals.push(signal);
-	} else {
-		current_component_context.d = [signal];
-	}
+	return create_source_signal(SOURCE | CLEAN, initial_value);
 }
 
 /**
@@ -1339,6 +1346,13 @@ function bind_signal_to_component_context(signal) {
 export function mutable_source(initial_value) {
 	const s = source(initial_value);
 	s.e = safe_equal;
+
+	// bind the signal to the component context, in case we need to
+	// track updates to trigger beforeUpdate/afterUpdate callbacks
+	if (current_component_context) {
+		(current_component_context.d ??= []).push(s);
+	}
+
 	return s;
 }
 
@@ -1607,10 +1621,6 @@ export function prop(props, key, flags, initial) {
 
 		// @ts-expect-error would need a cumbersome method overload to type this
 		if ((flags & PROPS_IS_LAZY_INITIAL) !== 0) initial = initial();
-
-		if (DEV && runes) {
-			initial = readonly(proxy(/** @type {any} */ (initial)));
-		}
 
 		prop_value = /** @type {V} */ (initial);
 
@@ -1883,9 +1893,10 @@ function on_destroy(fn) {
 /**
  * @param {Record<string, unknown>} props
  * @param {any} runes
+ * @param {Function} [fn]
  * @returns {void}
  */
-export function push(props, runes = false) {
+export function push(props, runes = false, fn) {
 	current_component_context = {
 		// exports (and props, if `accessors: true`)
 		x: null,
@@ -1906,6 +1917,12 @@ export function push(props, runes = false) {
 		// update_callbacks
 		u: null
 	};
+
+	if (DEV) {
+		// component function
+		// @ts-expect-error
+		current_component_context.function = fn;
+	}
 }
 
 /**
@@ -1944,10 +1961,7 @@ function observe_all(context) {
 		for (const signal of context.d) get(signal);
 	}
 
-	const props = get_descriptors(context.s);
-	for (const descriptor of Object.values(props)) {
-		if (descriptor.get) descriptor.get();
-	}
+	deep_read(context.s);
 }
 
 /**
@@ -2148,10 +2162,6 @@ export function freeze(value) {
 		// If the object is already proxified, then unstate the value
 		if (STATE_SYMBOL in value) {
 			return object_freeze(unstate(value));
-		}
-		// If the value is already read-only then just use that
-		if (DEV && READONLY_SYMBOL in value) {
-			return value;
 		}
 		// Otherwise freeze the object
 		object_freeze(value);
