@@ -328,24 +328,24 @@ declare module 'svelte' {
 	 */
 	export function createRoot(): void;
 	/**
-	 * Mounts a component to the given target and returns the exports and potentially the accessors (if compiled with `accessors: true`) of the component
+	 * Mounts a component to the given target and returns the exports and potentially the props (if compiled with `accessors: true`) of the component
 	 *
 	 * */
 	export function mount<Props extends Record<string, any>, Exports extends Record<string, any>, Events extends Record<string, any>>(component: ComponentType<SvelteComponent<Props, Events, any>>, options: {
 		target: Node;
 		props?: Props | undefined;
-		events?: Events | undefined;
+		events?: { [Property in keyof Events]: (e: Events[Property]) => any; } | undefined;
 		context?: Map<any, any> | undefined;
 		intro?: boolean | undefined;
 	}): Exports;
 	/**
-	 * Hydrates a component on the given target and returns the exports and potentially the accessors (if compiled with `accessors: true`) of the component
+	 * Hydrates a component on the given target and returns the exports and potentially the props (if compiled with `accessors: true`) of the component
 	 *
 	 * */
 	export function hydrate<Props extends Record<string, any>, Exports extends Record<string, any>, Events extends Record<string, any>>(component: ComponentType<SvelteComponent<Props, Events, any>>, options: {
 		target: Node;
 		props?: Props | undefined;
-		events?: Events | undefined;
+		events?: { [Property in keyof Events]: (e: Events[Property]) => any; } | undefined;
 		context?: Map<any, any> | undefined;
 		intro?: boolean | undefined;
 		recover?: false | undefined;
