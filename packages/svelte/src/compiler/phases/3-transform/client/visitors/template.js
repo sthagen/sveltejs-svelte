@@ -1314,6 +1314,7 @@ function serialize_event_handler(node, { state, visit }) {
 				binding !== null &&
 				(binding.kind === 'state' ||
 					binding.kind === 'frozen_state' ||
+					binding.declaration_kind === 'import' ||
 					binding.kind === 'legacy_reactive' ||
 					binding.kind === 'derived' ||
 					binding.kind === 'prop' ||
@@ -2080,7 +2081,7 @@ export const template_visitors = {
 			node.fragment.nodes,
 			context.path,
 			child_metadata.namespace,
-			state.preserve_whitespace,
+			node.name === 'script' || state.preserve_whitespace,
 			state.options.preserveComments
 		);
 
