@@ -1018,6 +1018,12 @@ export function selected(dom) {
  */
 export function bind_value(dom, get_value, update) {
 	dom.addEventListener('input', () => {
+		if (DEV && dom.type === 'checkbox') {
+			throw new Error(
+				'Using bind:value together with a checkbox input is not allowed. Use bind:checked instead'
+			);
+		}
+
 		/** @type {any} */
 		let value = dom.value;
 		if (is_numberlike_input(dom)) {
@@ -1027,12 +1033,24 @@ export function bind_value(dom, get_value, update) {
 	});
 
 	render_effect(() => {
+		if (DEV && dom.type === 'checkbox') {
+			throw new Error(
+				'Using bind:value together with a checkbox input is not allowed. Use bind:checked instead'
+			);
+		}
+
 		const value = get_value();
 		// @ts-ignore
 		dom.__value = value;
 
 		if (is_numberlike_input(dom) && value === to_number(dom.value)) {
 			// handles 0 vs 00 case (see https://github.com/sveltejs/svelte/issues/9959)
+			return;
+		}
+
+		if (dom.type === 'date' && !value && !dom.value) {
+			// Handles the case where a temporarily invalid date is set (while typing, for example with a leading 0 for the day)
+			// and prevents this state from clearing the other parts of the date input (see https://github.com/sveltejs/svelte/issues/7897)
 			return;
 		}
 
@@ -1383,6 +1401,7 @@ export function delegate(events) {
  * @returns {void}
  */
 function handle_event_propagation(handler_element, event) {
+	const owner_document = handler_element.ownerDocument;
 	const event_name = event.type;
 	const path = event.composedPath?.() || [];
 	let current_target = /** @type {null | Element} */ (path[0] || event.target);
@@ -1402,12 +1421,15 @@ function handle_event_propagation(handler_element, event) {
 	const handled_at = event.__root;
 	if (handled_at) {
 		const at_idx = path.indexOf(handled_at);
-		if (at_idx !== -1 && handler_element === document) {
-			// This is the fallback document listener but the event was already handled
-			// -> ignore, but set handle_at to document so that we're resetting the event
+		if (
+			at_idx !== -1 &&
+			(handler_element === document || handler_element === /** @type {any} */ (window))
+		) {
+			// This is the fallback document listener or a window listener, but the event was already handled
+			// -> ignore, but set handle_at to document/window so that we're resetting the event
 			// chain in case someone manually dispatches the same event object again.
 			// @ts-expect-error
-			event.__root = document;
+			event.__root = handler_element;
 			return;
 		}
 		// We're deliberately not skipping if the index is higher, because
@@ -1433,8 +1455,7 @@ function handle_event_propagation(handler_element, event) {
 	define_property(event, 'currentTarget', {
 		configurable: true,
 		get() {
-			// TODO: ensure correct document?
-			return current_target || document;
+			return current_target || owner_document;
 		}
 	});
 
@@ -2519,7 +2540,7 @@ export function hydrate(component, options) {
 			);
 			remove(hydration_fragment);
 			first_child.remove();
-			hydration_fragment.at(-1)?.nextSibling?.remove();
+			hydration_fragment[hydration_fragment.length - 1]?.nextSibling?.remove();
 			set_current_hydration_fragment(null);
 			return mount(component, options);
 		} else {
