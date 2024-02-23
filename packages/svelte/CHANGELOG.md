@@ -1,5 +1,19 @@
 # svelte
 
+## 5.0.0-next.68
+
+### Patch Changes
+
+- fix: improve deep_read performance ([#10624](https://github.com/sveltejs/svelte/pull/10624))
+
+## 5.0.0-next.67
+
+### Patch Changes
+
+- fix: improve event delegation with shadowed bindings ([#10620](https://github.com/sveltejs/svelte/pull/10620))
+
+- feat: add reactive Date object to svelte/reactivity ([#10622](https://github.com/sveltejs/svelte/pull/10622))
+
 ## 5.0.0-next.66
 
 ### Patch Changes
