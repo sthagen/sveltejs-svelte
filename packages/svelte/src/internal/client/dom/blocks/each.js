@@ -20,8 +20,8 @@ import { current_block, destroy_signal, execute_effect, push_destroy_fn } from '
 import { render_effect } from '../../reactivity/effects.js';
 import { source, mutable_source, set } from '../../reactivity/sources.js';
 import { trigger_transitions } from '../../transitions.js';
-import { is_array } from '../../utils.js';
-import { EACH_BLOCK, EACH_ITEM_BLOCK } from '../../constants.js';
+import { is_array, is_frozen } from '../../utils.js';
+import { EACH_BLOCK, EACH_ITEM_BLOCK, STATE_SYMBOL } from '../../constants.js';
 
 const NEW_BLOCK = -1;
 const MOVED_BLOCK = 99999999;
@@ -55,8 +55,8 @@ export function create_each_block(flags, anchor) {
 }
 
 /**
- * @param {any | import('../../types.js').Signal<any>} item
- * @param {number | import('../../types.js').Signal<number>} index
+ * @param {any | import('../../types.js').Value<any>} item
+ * @param {number | import('../../types.js').Value<number>} index
  * @param {null | unknown} key
  * @returns {import('../../types.js').EachItemBlock}
  */
@@ -110,7 +110,7 @@ function each(anchor_node, collection, flags, key_fn, render_fn, fallback_fn, re
 	/** @type {Array<string> | null} */
 	let keys = null;
 
-	/** @type {null | import('../../types.js').EffectSignal} */
+	/** @type {null | import('../../types.js').Effect} */
 	let render = null;
 
 	/**
@@ -279,7 +279,7 @@ function each(anchor_node, collection, flags, key_fn, render_fn, fallback_fn, re
 		}
 		// Clear the array
 		reconcile_fn([], block, anchor_node, is_controlled, render_fn, flags, false, keys);
-		destroy_signal(/** @type {import('../../types.js').EffectSignal} */ (render));
+		destroy_signal(/** @type {import('../../types.js').Effect} */ (render));
 	});
 
 	block.e = each;
@@ -318,7 +318,7 @@ export function each_indexed(anchor_node, collection, flags, render_fn, fallback
  * @param {import('../../types.js').EachBlock} each_block
  * @param {Element | Comment | Text} dom
  * @param {boolean} is_controlled
- * @param {(anchor: null, item: V, index: number | import('../../types.js').Signal<number>) => void} render_fn
+ * @param {(anchor: null, item: V, index: number | import('../../types.js').Source<number>) => void} render_fn
  * @param {number} flags
  * @param {boolean} apply_transitions
  * @returns {void}
@@ -332,6 +332,11 @@ function reconcile_indexed_array(
 	flags,
 	apply_transitions
 ) {
+	// If we are working with an array that isn't proxied or frozen, then remove strict equality and ensure the items
+	// are treated as reactive, so they get wrapped in a signal.
+	if ((flags & EACH_IS_STRICT_EQUALS) !== 0 && !is_frozen(array) && !(STATE_SYMBOL in array)) {
+		flags ^= EACH_IS_STRICT_EQUALS;
+	}
 	var a_blocks = each_block.v;
 	var active_transitions = each_block.s;
 
@@ -433,7 +438,7 @@ function reconcile_indexed_array(
  * @param {import('../../types.js').EachBlock} each_block
  * @param {Element | Comment | Text} dom
  * @param {boolean} is_controlled
- * @param {(anchor: null, item: V, index: number | import('../../types.js').Signal<number>) => void} render_fn
+ * @param {(anchor: null, item: V, index: number | import('../../types.js').Source<number>) => void} render_fn
  * @param {number} flags
  * @param {boolean} apply_transitions
  * @param {Array<string> | null} keys
@@ -449,6 +454,15 @@ function reconcile_tracked_array(
 	apply_transitions,
 	keys
 ) {
+	// If we are working with an array that isn't proxied or frozen, then remove strict equality and ensure the items
+	// are treated as reactive, so they get wrapped in a signal.
+	if ((flags & EACH_IS_STRICT_EQUALS) !== 0 && !is_frozen(array) && !(STATE_SYMBOL in array)) {
+		flags ^= EACH_IS_STRICT_EQUALS;
+		// Additionally as we're in an keyed each block, we'll need ensure the itens are all wrapped in signals.
+		if ((flags & EACH_ITEM_REACTIVE) === 0) {
+			flags ^= EACH_ITEM_REACTIVE;
+		}
+	}
 	var a_blocks = each_block.v;
 	const is_computed_key = keys !== null;
 	var active_transitions = each_block.s;
@@ -848,7 +862,7 @@ function update_each_item_block(block, item, index, type) {
 		each_animation(block, transitions);
 	}
 	if (index_is_reactive) {
-		set(/** @type {import('../../types.js').Signal<number>} */ (block.i), index);
+		set(/** @type {import('../../types.js').Value<number>} */ (block.i), index);
 	} else {
 		block.i = index;
 	}
@@ -890,7 +904,7 @@ export function destroy_each_item_block(
 	if (!controlled && dom !== null) {
 		remove(dom);
 	}
-	destroy_signal(/** @type {import('../../types.js').EffectSignal} */ (block.e));
+	destroy_signal(/** @type {import('../../types.js').Effect} */ (block.e));
 }
 
 /**
@@ -898,7 +912,7 @@ export function destroy_each_item_block(
  * @param {V} item
  * @param {unknown} key
  * @param {number} index
- * @param {(anchor: null, item: V, index: number | import('../../types.js').Signal<number>) => void} render_fn
+ * @param {(anchor: null, item: V, index: number | import('../../types.js').Value<number>) => void} render_fn
  * @param {number} flags
  * @returns {import('../../types.js').EachItemBlock}
  */
