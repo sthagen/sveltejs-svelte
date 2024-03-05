@@ -1,14 +1,12 @@
 import { DEV } from 'esm-env';
 import {
 	get,
-	set,
 	updating_derived,
 	batch_inspect,
 	current_component_context,
-	untrack,
-	set_signal_value
+	untrack
 } from './runtime.js';
-import { effect_active } from './reactivity/computations.js';
+import { effect_active } from './reactivity/effects.js';
 import {
 	array_prototype,
 	define_property,
@@ -20,7 +18,7 @@ import {
 	object_prototype
 } from './utils.js';
 import { add_owner, check_ownership, strip_owner } from './dev/ownership.js';
-import { mutable_source, source } from './reactivity/sources.js';
+import { mutable_source, source, set } from './reactivity/sources.js';
 import { STATE_SYMBOL, UNINITIALIZED } from './constants.js';
 
 /**
@@ -155,7 +153,7 @@ export function unstate(value) {
  */
 function update_version(signal, d = 1) {
 	const value = untrack(() => get(signal));
-	set_signal_value(signal, value + d);
+	set(signal, value + d);
 }
 
 /** @type {ProxyHandler<import('./types.js').ProxyStateObject<any>>} */

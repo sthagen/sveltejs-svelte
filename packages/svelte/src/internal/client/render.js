@@ -45,19 +45,18 @@ import {
 	pop,
 	current_component_context,
 	get,
-	set,
 	is_signals_recorded,
 	inspect_fn,
 	deep_read_state
 } from './runtime.js';
+import { derived } from './reactivity/deriveds.js';
 import {
 	render_effect,
 	effect,
 	managed_effect,
-	derived,
 	pre_effect,
 	user_effect
-} from './reactivity/computations.js';
+} from './reactivity/effects.js';
 import {
 	current_hydration_fragment,
 	get_hydration_fragment,
@@ -76,7 +75,7 @@ import {
 } from './utils.js';
 import { run } from '../common.js';
 import { bind_transition, trigger_transitions } from './transitions.js';
-import { mutable_source, source } from './reactivity/sources.js';
+import { mutable_source, source, set } from './reactivity/sources.js';
 import { safe_equal, safe_not_equal } from './reactivity/equality.js';
 
 /** @type {Set<string>} */
@@ -490,7 +489,7 @@ export function text(dom, value) {
  * @param {boolean} value
  * @returns {void}
  */
-export function auto_focus(dom, value) {
+export function autofocus(dom, value) {
 	if (value) {
 		const body = document.body;
 		dom.autofocus = true;
@@ -1792,7 +1791,7 @@ export function component(anchor_node, component_fn, render_fn) {
  * @param {(anchor: Element | Text | Comment) => any} component
  * @returns {void}
  */
-export function cssProps(anchor, is_html, props, component) {
+export function css_props(anchor, is_html, props, component) {
 	hydrate_block_anchor(anchor);
 
 	/** @type {HTMLElement | SVGElement} */
@@ -2276,7 +2275,7 @@ export function spread_attributes(dom, prev, attrs, lowercase_attributes, css_ha
 		} else if (key === 'style') {
 			dom.style.cssText = value + '';
 		} else if (key === 'autofocus') {
-			auto_focus(/** @type {HTMLElement} */ (dom), Boolean(value));
+			autofocus(/** @type {HTMLElement} */ (dom), Boolean(value));
 		} else if (key === '__value' || key === 'value') {
 			// @ts-ignore
 			dom.value = dom[key] = dom.__value = value;
