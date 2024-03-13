@@ -1,5 +1,31 @@
 # svelte
 
+## 5.0.0-next.78
+
+### Patch Changes
+
+- fix: invalidate store when mutated inside each block ([#10785](https://github.com/sveltejs/svelte/pull/10785))
+
+- fix: make `set.has(...)` granular for existing properties' ([#10793](https://github.com/sveltejs/svelte/pull/10793))
+
+## 5.0.0-next.77
+
+### Patch Changes
+
+- fix: adjust render effect ordering ([#10783](https://github.com/sveltejs/svelte/pull/10783))
+
+- fix: handle component binding mutation ([#10786](https://github.com/sveltejs/svelte/pull/10786))
+
+## 5.0.0-next.76
+
+### Patch Changes
+
+- feat: add reactive Set class to svelte/reactivity ([#10781](https://github.com/sveltejs/svelte/pull/10781))
+
+- breaking: make `$props()` rune non-generic ([#10694](https://github.com/sveltejs/svelte/pull/10694))
+
+- fix: improve internal render effect sequencing ([#10769](https://github.com/sveltejs/svelte/pull/10769))
+
 ## 5.0.0-next.75
 
 ### Patch Changes
