@@ -753,10 +753,11 @@ const legacy_scope_tweaker = {
 					state.scope.get(specifier.local.name)
 				);
 				if (
-					binding.kind === 'state' ||
-					binding.kind === 'frozen_state' ||
-					(binding.kind === 'normal' &&
-						(binding.declaration_kind === 'let' || binding.declaration_kind === 'var'))
+					binding !== null &&
+					(binding.kind === 'state' ||
+						binding.kind === 'frozen_state' ||
+						(binding.kind === 'normal' &&
+							(binding.declaration_kind === 'let' || binding.declaration_kind === 'var')))
 				) {
 					binding.kind = 'prop';
 					if (specifier.exported.name !== specifier.local.name) {
@@ -1072,6 +1073,7 @@ const common_visitors = {
 			}
 
 			if (
+				context.state.analysis.runes &&
 				node !== binding.node &&
 				// If we have $state that can be proxied or frozen and isn't re-assigned, then that means
 				// it's likely not using a primitive value and thus this warning isn't that helpful.
