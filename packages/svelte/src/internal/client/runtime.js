@@ -107,11 +107,7 @@ export let inspect_fn = null;
 /** @type {Array<import('./types.js').ValueDebug>} */
 let inspect_captured_signals = [];
 
-// Handle rendering tree blocks and anchors
-/** @type {null | import('./types.js').Block} */
-export let current_block = null;
 // Handling runtime component context
-
 /** @type {import('./types.js').ComponentContext | null} */
 export let current_component_context = null;
 
@@ -387,13 +383,11 @@ export function execute_effect(signal) {
 
 	const previous_effect = current_effect;
 	const previous_component_context = current_component_context;
-	const previous_block = current_block;
 
 	const component_context = signal.ctx;
 
 	current_effect = signal;
 	current_component_context = component_context;
-	current_block = signal.block;
 
 	try {
 		destroy_children(signal);
@@ -403,7 +397,6 @@ export function execute_effect(signal) {
 	} finally {
 		current_effect = previous_effect;
 		current_component_context = previous_component_context;
-		current_block = previous_block;
 	}
 
 	if ((signal.f & PRE_EFFECT) !== 0 && current_queued_pre_and_render_effects.length > 0) {
@@ -514,7 +507,6 @@ export function schedule_effect(signal, sync) {
 
 			if (!should_append) {
 				const target_level = signal.l;
-				const target_block = signal.block;
 				const is_pre_effect = (flags & PRE_EFFECT) !== 0;
 				let target_signal;
 				let target_signal_level;
@@ -530,7 +522,7 @@ export function schedule_effect(signal, sync) {
 							is_target_pre_effect = (target_signal.f & PRE_EFFECT) !== 0;
 							if (
 								target_signal_level < target_level ||
-								target_signal.block !== target_block ||
+								target_signal !== signal ||
 								(is_target_pre_effect && !is_pre_effect)
 							) {
 								i++;
@@ -1258,14 +1250,28 @@ export function unwrap(value) {
 }
 
 if (DEV) {
-	/** @param {string} rune */
+	/**
+	 * @param {string} rune
+	 */
 	function throw_rune_error(rune) {
 		if (!(rune in globalThis)) {
-			// @ts-ignore
-			globalThis[rune] = () => {
-				// TODO if people start adjusting the "this can contain runes" config through v-p-s more, adjust this message
-				throw new Error(`${rune} is only available inside .svelte and .svelte.js/ts files`);
-			};
+			// TODO if people start adjusting the "this can contain runes" config through v-p-s more, adjust this message
+			/** @type {any} */
+			let value; // let's hope noone modifies this global, but belts and braces
+			Object.defineProperty(globalThis, rune, {
+				configurable: true,
+				get: () => {
+					if (value !== undefined) {
+						return value;
+					}
+					throw new Error(
+						`The ${rune} rune is only available inside .svelte and .svelte.js/ts files`
+					);
+				},
+				set: (v) => {
+					value = v;
+				}
+			});
 		}
 	}
 
@@ -1274,6 +1280,7 @@ if (DEV) {
 	throw_rune_error('$derived');
 	throw_rune_error('$inspect');
 	throw_rune_error('$props');
+	throw_rune_error('$bindable');
 }
 
 /**

@@ -1382,6 +1382,7 @@ function serialize_event_handler(node, { state, visit }) {
 					binding.kind === 'legacy_reactive' ||
 					binding.kind === 'derived' ||
 					binding.kind === 'prop' ||
+					binding.kind === 'bindable_prop' ||
 					binding.kind === 'store_sub')
 			) {
 				handler = dynamic_handler();
@@ -2891,6 +2892,10 @@ export const template_visitors = {
 					break;
 				}
 
+				case 'files':
+					call_expr = b.call(`$.bind_files`, state.node, getter, setter);
+					break;
+
 				case 'this':
 					call_expr = serialize_bind_this(node.expression, context, state.node);
 					break;
@@ -3218,5 +3223,6 @@ export const template_visitors = {
 			node: b.id('$.document')
 		});
 	},
-	CallExpression: javascript_visitors_runes.CallExpression
+	CallExpression: javascript_visitors_runes.CallExpression,
+	VariableDeclaration: javascript_visitors_runes.VariableDeclaration
 };
