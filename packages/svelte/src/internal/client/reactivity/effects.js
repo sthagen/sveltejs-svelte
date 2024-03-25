@@ -129,22 +129,6 @@ export function effect(fn) {
 }
 
 /**
- * @param {() => void | (() => void)} fn
- * @returns {import('#client').Effect}
- */
-export function managed_effect(fn) {
-	return create_effect(EFFECT | MANAGED, fn, false);
-}
-
-/**
- * @param {() => void | (() => void)} fn
- * @returns {import('#client').Effect}
- */
-export function managed_pre_effect(fn) {
-	return create_effect(PRE_EFFECT | MANAGED, fn, false);
-}
-
-/**
  * Internal representation of `$effect.pre(...)`
  * @param {() => void | (() => void)} fn
  * @returns {import('#client').Effect}
@@ -216,14 +200,13 @@ export function invalidate_effect(fn) {
 /**
  * @param {(() => void)} fn
  * @param {boolean} managed
- * @param {boolean} sync
  * @returns {import('#client').Effect}
  */
-export function render_effect(fn, managed = false, sync = true) {
+export function render_effect(fn, managed = false) {
 	let flags = RENDER_EFFECT;
 	if (managed) flags |= MANAGED;
 
-	return create_effect(flags, /** @type {any} */ (fn), sync);
+	return create_effect(flags, /** @type {any} */ (fn), true);
 }
 
 /**
