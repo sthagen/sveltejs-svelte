@@ -1,10 +1,10 @@
-import { hydrate_nodes, hydrating, set_hydrate_nodes, update_hydrate_nodes } from '../hydration.js';
+import { hydrate_anchor, hydrate_nodes, hydrating, set_hydrate_nodes } from '../hydration.js';
 import { empty } from '../operations.js';
 import { render_effect } from '../../reactivity/effects.js';
 import { remove } from '../reconciler.js';
 
 /**
- * @param {(anchor: Node | null) => import('#client').Dom | void} render_fn
+ * @param {(anchor: Node) => import('#client').Dom | void} render_fn
  * @returns {void}
  */
 export function head(render_fn) {
@@ -15,7 +15,13 @@ export function head(render_fn) {
 
 	if (hydrating) {
 		previous_hydrate_nodes = hydrate_nodes;
-		update_hydrate_nodes(document.head.firstChild);
+
+		let anchor = /** @type {import('#client').TemplateNode} */ (document.head.firstChild);
+		while (anchor.nodeType !== 8 || /** @type {Comment} */ (anchor).data !== '[') {
+			anchor = /** @type {import('#client').TemplateNode} */ (anchor.nextSibling);
+		}
+
+		anchor = /** @type {import('#client').TemplateNode} */ (hydrate_anchor(anchor));
 	}
 
 	var anchor = document.head.appendChild(empty());
@@ -30,7 +36,7 @@ export function head(render_fn) {
 				head_effect.dom = dom = null;
 			}
 
-			dom = render_fn(hydrating ? null : anchor) ?? null;
+			dom = render_fn(anchor) ?? null;
 		});
 
 		head_effect.ondestroy = () => {
@@ -40,7 +46,7 @@ export function head(render_fn) {
 		};
 	} finally {
 		if (was_hydrating) {
-			set_hydrate_nodes(previous_hydrate_nodes);
+			set_hydrate_nodes(/** @type {import('#client').TemplateNode[]} */ (previous_hydrate_nodes));
 		}
 	}
 }

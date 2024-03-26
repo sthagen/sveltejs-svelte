@@ -6,13 +6,7 @@ import {
 	EACH_ITEM_REACTIVE,
 	EACH_KEYED
 } from '../../../../constants.js';
-import {
-	hydrate_nodes,
-	hydrate_block_anchor,
-	hydrating,
-	set_hydrating,
-	update_hydrate_nodes
-} from '../hydration.js';
+import { hydrate_anchor, hydrate_nodes, hydrating, set_hydrating } from '../hydration.js';
 import { empty } from '../operations.js';
 import { insert, remove } from '../reconciler.js';
 import { untrack } from '../../runtime.js';
@@ -46,24 +40,28 @@ export function set_current_each_item(item) {
 /**
  * @template V
  * @param {Element | Comment} anchor The next sibling node, or the parent node if this is a 'controlled' block
- * @param {() => V[]} get_collection
  * @param {number} flags
+ * @param {() => V[]} get_collection
  * @param {null | ((item: V) => string)} get_key
- * @param {(anchor: null, item: V, index: import('#client').MaybeSource<number>) => void} render_fn
- * @param {null | ((anchor: Node | null) => void)} fallback_fn
+ * @param {(anchor: Node, item: V, index: import('#client').MaybeSource<number>) => void} render_fn
+ * @param {null | ((anchor: Node) => void)} fallback_fn
  * @param {typeof reconcile_indexed_array | reconcile_tracked_array} reconcile_fn
  * @returns {void}
  */
-function each(anchor, get_collection, flags, get_key, render_fn, fallback_fn, reconcile_fn) {
+function each(anchor, flags, get_collection, get_key, render_fn, fallback_fn, reconcile_fn) {
 	/** @type {import('#client').EachState} */
 	var state = { flags, items: [] };
 
 	var is_controlled = (flags & EACH_IS_CONTROLLED) !== 0;
-	hydrate_block_anchor(is_controlled ? /** @type {Node} */ (anchor.firstChild) : anchor);
 
 	if (is_controlled) {
 		var parent_node = /** @type {Element} */ (anchor);
-		parent_node.append((anchor = empty()));
+
+		anchor = hydrating
+			? /** @type {Comment | Text} */ (
+					hydrate_anchor(/** @type {Comment | Text} */ (parent_node.firstChild))
+				)
+			: parent_node.appendChild(empty());
 	}
 
 	/** @type {import('#client').Effect | null} */
@@ -115,14 +113,11 @@ function each(anchor, get_collection, flags, get_key, render_fn, fallback_fn, re
 		if (hydrating) {
 			var b_items = [];
 
-			// Hydrate block
-			var hydration_list = /** @type {import('#client').TemplateNode[]} */ (hydrate_nodes);
-			var hydrating_node = hydration_list[0];
+			/** @type {Node} */
+			var child_anchor = hydrate_nodes[0];
 
 			for (var i = 0; i < length; i++) {
-				var nodes = update_hydrate_nodes(hydrating_node);
-
-				if (nodes === null) {
+				if (child_anchor.nodeType !== 8 || /** @type {Comment} */ (child_anchor).data !== '[') {
 					// If `nodes` is null, then that means that the server rendered fewer items than what
 					// expected, so break out and continue appending non-hydrated items
 					mismatch = true;
@@ -130,17 +125,19 @@ function each(anchor, get_collection, flags, get_key, render_fn, fallback_fn, re
 					break;
 				}
 
-				b_items[i] = create_item(array[i], keys?.[i], i, render_fn, flags);
-
-				// TODO helperise this
-				hydrating_node = /** @type {import('#client').TemplateNode} */ (
-					/** @type {Node} */ (
-						/** @type {Node} */ (nodes[nodes.length - 1] || hydrating_node).nextSibling
-					).nextSibling
-				);
+				child_anchor = hydrate_anchor(child_anchor);
+				b_items[i] = create_item(child_anchor, array[i], keys?.[i], i, render_fn, flags);
+				child_anchor = /** @type {Comment} */ (child_anchor.nextSibling);
 			}
 
-			remove_excess_hydration_nodes(hydration_list, hydrating_node);
+			// remove excess nodes
+			if (length > 0) {
+				while (child_anchor !== anchor) {
+					var next = /** @type {import('#client').TemplateNode} */ (child_anchor.nextSibling);
+					/** @type {import('#client').TemplateNode} */ (child_anchor).remove();
+					child_anchor = next;
+				}
+			}
 
 			state.items = b_items;
 		}
@@ -156,7 +153,7 @@ function each(anchor, get_collection, flags, get_key, render_fn, fallback_fn, re
 					resume_effect(fallback);
 				} else {
 					fallback = render_effect(() => {
-						var dom = fallback_fn(hydrating ? null : anchor);
+						var dom = fallback_fn(anchor);
 
 						return () => {
 							if (dom !== undefined) {
@@ -193,28 +190,28 @@ function each(anchor, get_collection, flags, get_key, render_fn, fallback_fn, re
 /**
  * @template V
  * @param {Element | Comment} anchor
- * @param {() => V[]} get_collection
  * @param {number} flags
+ * @param {() => V[]} get_collection
  * @param {null | ((item: V) => string)} get_key
- * @param {(anchor: null, item: V, index: import('#client').MaybeSource<number>) => void} render_fn
- * @param {null | ((anchor: Node | null) => void)} fallback_fn
+ * @param {(anchor: Node, item: V, index: import('#client').MaybeSource<number>) => void} render_fn
+ * @param {null | ((anchor: Node) => void)} [fallback_fn]
  * @returns {void}
  */
-export function each_keyed(anchor, get_collection, flags, get_key, render_fn, fallback_fn) {
-	each(anchor, get_collection, flags, get_key, render_fn, fallback_fn, reconcile_tracked_array);
+export function each_keyed(anchor, flags, get_collection, get_key, render_fn, fallback_fn = null) {
+	each(anchor, flags, get_collection, get_key, render_fn, fallback_fn, reconcile_tracked_array);
 }
 
 /**
  * @template V
  * @param {Element | Comment} anchor
- * @param {() => V[]} get_collection
  * @param {number} flags
- * @param {(anchor: null, item: V, index: import('#client').MaybeSource<number>) => void} render_fn
- * @param {null | ((anchor: Node | null) => void)} fallback_fn
+ * @param {() => V[]} get_collection
+ * @param {(anchor: Node, item: V, index: import('#client').MaybeSource<number>) => void} render_fn
+ * @param {null | ((anchor: Node) => void)} [fallback_fn]
  * @returns {void}
  */
-export function each_indexed(anchor, get_collection, flags, render_fn, fallback_fn) {
-	each(anchor, get_collection, flags, null, render_fn, fallback_fn, reconcile_indexed_array);
+export function each_indexed(anchor, flags, get_collection, render_fn, fallback_fn = null) {
+	each(anchor, flags, get_collection, null, render_fn, fallback_fn, reconcile_indexed_array);
 }
 
 /**
@@ -222,7 +219,7 @@ export function each_indexed(anchor, get_collection, flags, render_fn, fallback_
  * @param {Array<V>} array
  * @param {import('#client').EachState} state
  * @param {Element | Comment | Text} anchor
- * @param {(anchor: null, item: V, index: number | import('#client').Source<number>) => void} render_fn
+ * @param {(anchor: Node, item: V, index: number | import('#client').Source<number>) => void} render_fn
  * @param {number} flags
  * @returns {void}
  */
@@ -252,9 +249,8 @@ function reconcile_indexed_array(array, state, anchor, render_fn, flags) {
 		// add items
 		for (; i < b; i += 1) {
 			value = array[i];
-			item = create_item(value, null, i, render_fn, flags);
+			item = create_item(anchor, value, null, i, render_fn, flags);
 			b_items[i] = item;
-			insert_item(item, anchor);
 		}
 
 		state.items = b_items;
@@ -279,7 +275,7 @@ function reconcile_indexed_array(array, state, anchor, render_fn, flags) {
  * @param {Array<V>} array
  * @param {import('#client').EachState} state
  * @param {Element | Comment | Text} anchor
- * @param {(anchor: null, item: V, index: number | import('#client').Source<number>) => void} render_fn
+ * @param {(anchor: Node, item: V, index: number | import('#client').Source<number>) => void} render_fn
  * @param {number} flags
  * @param {any[]} keys
  * @returns {void}
@@ -330,9 +326,8 @@ function reconcile_tracked_array(array, state, anchor, render_fn, flags, keys) {
 	if (start === a) {
 		// add only
 		while (start < b) {
-			item = create_item(array[start], keys[start], start, render_fn, flags);
+			item = create_item(anchor, array[start], keys[start], start, render_fn, flags);
 			b_items[start++] = item;
-			insert_item(item, anchor);
 		}
 	} else if (start === b) {
 		// remove only
@@ -401,20 +396,21 @@ function reconcile_tracked_array(array, state, anchor, render_fn, flags, keys) {
 		// working from the back, insert new or moved items
 		while (b-- > start) {
 			index = sources[b - start];
-			var insert = index === NEW_ITEM;
+			var should_insert = index === NEW_ITEM;
 
-			if (insert) {
-				item = create_item(array[b], keys[b], b, render_fn, flags);
+			if (should_insert) {
+				if (last_item !== undefined) anchor = get_first_child(last_item);
+				item = create_item(anchor, array[b], keys[b], b, render_fn, flags);
 			} else {
 				item = b_items[b];
 				if (should_update) {
 					update_item(item, array[b], b, flags);
 				}
-			}
 
-			if (insert || (moved && index !== LIS_ITEM)) {
-				last_sibling = last_item === undefined ? anchor : get_first_child(last_item);
-				anchor = insert_item(item, last_sibling);
+				if (moved && index !== LIS_ITEM) {
+					if (last_item !== undefined) anchor = get_first_child(last_item);
+					insert(/** @type {import('#client').Dom} */ (item.e.dom), anchor);
+				}
 			}
 
 			last_item = b_items[b] = item;
@@ -438,20 +434,6 @@ function reconcile_tracked_array(array, state, anchor, render_fn, flags, keys) {
 	pause_effects(to_destroy, () => {
 		state.items = b_items;
 	});
-}
-
-/**
- * The server could have rendered more list items than the client specifies.
- * In that case, we need to remove the remaining server-rendered nodes.
- * @param {import('#client').TemplateNode[]} hydration_list
- * @param {import('#client').TemplateNode | null} next_node
- */
-function remove_excess_hydration_nodes(hydration_list, next_node) {
-	if (next_node === null) return;
-	var idx = hydration_list.indexOf(next_node);
-	if (idx !== -1 && hydration_list.length > idx + 1) {
-		remove(hydration_list.slice(idx));
-	}
 }
 
 /**
@@ -529,16 +511,6 @@ function mark_lis(a) {
 
 /**
  * @param {import('#client').EachItem} item
- * @param {Text | Element | Comment} anchor
- * @returns {Text | Element | Comment}
- */
-function insert_item(item, anchor) {
-	var current = /** @type {import('#client').Dom} */ (item.e.dom);
-	return insert(current, anchor);
-}
-
-/**
- * @param {import('#client').EachItem} item
  * @returns {Text | Element | Comment}
  */
 function get_first_child(item) {
@@ -572,14 +544,15 @@ function update_item(item, value, index, type) {
 
 /**
  * @template V
+ * @param {Node} anchor
  * @param {V} value
  * @param {unknown} key
  * @param {number} index
- * @param {(anchor: null, item: V, index: number | import('#client').Value<number>) => void} render_fn
+ * @param {(anchor: Node, item: V, index: number | import('#client').Value<number>) => void} render_fn
  * @param {number} flags
  * @returns {import('#client').EachItem}
  */
-function create_item(value, key, index, render_fn, flags) {
+function create_item(anchor, value, key, index, render_fn, flags) {
 	var each_item_not_reactive = (flags & EACH_ITEM_REACTIVE) === 0;
 
 	/** @type {import('#client').EachItem} */
@@ -606,7 +579,7 @@ function create_item(value, key, index, render_fn, flags) {
 		current_each_item = item;
 
 		item.e = render_effect(() => {
-			var dom = render_fn(null, item.v, item.i);
+			var dom = render_fn(anchor, item.v, item.i);
 
 			return () => {
 				if (dom !== undefined) {

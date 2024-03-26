@@ -8,7 +8,7 @@ import {
 	object_prototype
 } from './utils.js';
 import { unstate } from './proxy.js';
-import { destroy_effect, pre_effect } from './reactivity/effects.js';
+import { destroy_effect, user_pre_effect } from './reactivity/effects.js';
 import {
 	EFFECT,
 	PRE_EFFECT,
@@ -21,8 +21,7 @@ import {
 	DESTROYED,
 	INERT,
 	MANAGED,
-	STATE_SYMBOL,
-	EFFECT_RAN
+	STATE_SYMBOL
 } from './constants.js';
 import { flush_tasks } from './dom/task.js';
 import { add_owner } from './dev/ownership.js';
@@ -36,7 +35,13 @@ const FLUSH_SYNC = 1;
 let current_scheduler_mode = FLUSH_MICROTASK;
 // Used for handling scheduling
 let is_micro_task_queued = false;
-let is_flushing_effect = false;
+export let is_flushing_effect = false;
+
+/** @param {boolean} value */
+export function set_is_flushing_effect(value) {
+	is_flushing_effect = value;
+}
+
 // Used for $inspect
 export let is_batching_effect = false;
 let is_inspecting_signal = false;
@@ -210,9 +215,6 @@ export function check_dirtiness(reaction) {
  * @returns {V}
  */
 export function execute_reaction_fn(signal) {
-	const fn = signal.fn;
-	const flags = signal.f;
-
 	const previous_dependencies = current_dependencies;
 	const previous_dependencies_index = current_dependencies_index;
 	const previous_untracked_writes = current_untracked_writes;
@@ -224,11 +226,11 @@ export function execute_reaction_fn(signal) {
 	current_dependencies_index = 0;
 	current_untracked_writes = null;
 	current_reaction = signal;
-	current_skip_reaction = !is_flushing_effect && (flags & UNOWNED) !== 0;
+	current_skip_reaction = !is_flushing_effect && (signal.f & UNOWNED) !== 0;
 	current_untracking = false;
 
 	try {
-		let res = fn();
+		let res = signal.fn();
 		let dependencies = /** @type {import('./types.js').Value<unknown>[]} **/ (signal.deps);
 		if (current_dependencies !== null) {
 			let i;
@@ -373,34 +375,37 @@ export function destroy_children(signal) {
 }
 
 /**
- * @param {import('./types.js').Effect} signal
+ * @param {import('./types.js').Effect} effect
  * @returns {void}
  */
-export function execute_effect(signal) {
-	if ((signal.f & DESTROYED) !== 0) {
+export function execute_effect(effect) {
+	if ((effect.f & DESTROYED) !== 0) {
 		return;
 	}
 
-	const previous_effect = current_effect;
-	const previous_component_context = current_component_context;
+	set_signal_status(effect, CLEAN);
 
-	const component_context = signal.ctx;
+	var component_context = effect.ctx;
 
-	current_effect = signal;
+	var previous_effect = current_effect;
+	var previous_component_context = current_component_context;
+
+	current_effect = effect;
 	current_component_context = component_context;
 
 	try {
-		destroy_children(signal);
-		signal.teardown?.();
-		const teardown = execute_reaction_fn(signal);
-		signal.teardown = typeof teardown === 'function' ? teardown : null;
+		destroy_children(effect);
+		effect.teardown?.();
+		var teardown = execute_reaction_fn(effect);
+		effect.teardown = typeof teardown === 'function' ? teardown : null;
 	} finally {
 		current_effect = previous_effect;
 		current_component_context = previous_component_context;
 	}
+	const parent = effect.parent;
 
-	if ((signal.f & PRE_EFFECT) !== 0 && current_queued_pre_and_render_effects.length > 0) {
-		flush_local_pre_effects(component_context);
+	if ((effect.f & PRE_EFFECT) !== 0 && parent !== null) {
+		flush_local_pre_effects(parent);
 	}
 }
 
@@ -436,7 +441,6 @@ function flush_queued_effects(effects) {
 
 			if ((signal.f & (DESTROYED | INERT)) === 0) {
 				if (check_dirtiness(signal)) {
-					set_signal_status(signal, CLEAN);
 					execute_effect(signal);
 				}
 			}
@@ -466,118 +470,156 @@ function process_microtask() {
 
 /**
  * @param {import('./types.js').Effect} signal
- * @param {boolean} sync
  * @returns {void}
  */
-export function schedule_effect(signal, sync) {
+export function schedule_effect(signal) {
 	const flags = signal.f;
-	if (sync) {
-		const previously_flushing_effect = is_flushing_effect;
-		try {
-			is_flushing_effect = true;
-			execute_effect(signal);
-			set_signal_status(signal, CLEAN);
-		} finally {
-			is_flushing_effect = previously_flushing_effect;
+
+	if (current_scheduler_mode === FLUSH_MICROTASK) {
+		if (!is_micro_task_queued) {
+			is_micro_task_queued = true;
+			queueMicrotask(process_microtask);
+		}
+	}
+
+	if ((flags & EFFECT) !== 0) {
+		current_queued_effects.push(signal);
+		// Prevent any nested user effects from potentially triggering
+		// before this effect is scheduled. We know they will be destroyed
+		// so we can make them inert to avoid having to find them in the
+		// queue and remove them.
+		if ((flags & MANAGED) === 0) {
+			mark_subtree_children_inert(signal, true);
 		}
 	} else {
-		if (current_scheduler_mode === FLUSH_MICROTASK) {
-			if (!is_micro_task_queued) {
-				is_micro_task_queued = true;
-				queueMicrotask(process_microtask);
-			}
-		}
-		if ((flags & EFFECT) !== 0) {
-			current_queued_effects.push(signal);
-			// Prevent any nested user effects from potentially triggering
-			// before this effect is scheduled. We know they will be destroyed
-			// so we can make them inert to avoid having to find them in the
-			// queue and remove them.
-			if ((flags & MANAGED) === 0) {
-				mark_subtree_children_inert(signal, true);
-			}
-		} else {
-			// We need to ensure we insert the signal in the right topological order. In other words,
-			// we need to evaluate where to insert the signal based off its level and whether or not it's
-			// a pre-effect and within the same block. By checking the signals in the queue in reverse order
-			// we can find the right place quickly. TODO: maybe opt to use a linked list rather than an array
-			// for these operations.
-			const length = current_queued_pre_and_render_effects.length;
-			let should_append = length === 0;
+		// We need to ensure we insert the signal in the right topological order. In other words,
+		// we need to evaluate where to insert the signal based off its level and whether or not it's
+		// a pre-effect and within the same block. By checking the signals in the queue in reverse order
+		// we can find the right place quickly. TODO: maybe opt to use a linked list rather than an array
+		// for these operations.
+		const length = current_queued_pre_and_render_effects.length;
+		let should_append = length === 0;
 
-			if (!should_append) {
-				const target_level = signal.l;
-				const is_pre_effect = (flags & PRE_EFFECT) !== 0;
-				let target_signal;
-				let target_signal_level;
-				let is_target_pre_effect;
-				let i = length;
-				while (true) {
-					target_signal = current_queued_pre_and_render_effects[--i];
-					target_signal_level = target_signal.l;
-					if (target_signal_level <= target_level) {
-						if (i + 1 === length) {
-							should_append = true;
-						} else {
-							is_target_pre_effect = (target_signal.f & PRE_EFFECT) !== 0;
-							if (
-								target_signal_level < target_level ||
-								target_signal !== signal ||
-								(is_target_pre_effect && !is_pre_effect)
-							) {
-								i++;
-							}
-							current_queued_pre_and_render_effects.splice(i, 0, signal);
+		if (!should_append) {
+			const target_level = signal.l;
+			const is_pre_effect = (flags & PRE_EFFECT) !== 0;
+			let target_signal;
+			let target_signal_level;
+			let is_target_pre_effect;
+			let i = length;
+			while (true) {
+				target_signal = current_queued_pre_and_render_effects[--i];
+				target_signal_level = target_signal.l;
+				if (target_signal_level <= target_level) {
+					if (i + 1 === length) {
+						should_append = true;
+					} else {
+						is_target_pre_effect = (target_signal.f & PRE_EFFECT) !== 0;
+						if (
+							target_signal_level < target_level ||
+							target_signal !== signal ||
+							(is_target_pre_effect && !is_pre_effect)
+						) {
+							i++;
 						}
-						break;
+						current_queued_pre_and_render_effects.splice(i, 0, signal);
 					}
-					if (i === 0) {
-						current_queued_pre_and_render_effects.unshift(signal);
-						break;
-					}
+					break;
+				}
+				if (i === 0) {
+					current_queued_pre_and_render_effects.unshift(signal);
+					break;
 				}
 			}
+		}
 
-			if (should_append) {
-				current_queued_pre_and_render_effects.push(signal);
+		if (should_append) {
+			current_queued_pre_and_render_effects.push(signal);
+		}
+	}
+}
+
+/**
+ *
+ * This function recursively collects effects in topological order from the starting effect passed in.
+ * Effects will be collected when they match the filtered bitwise flag passed in only. The collected
+ * array will be populated with all the effects.
+ *
+ * @param {import('./types.js').Effect} effect
+ * @param {number} filter_flags
+ * @param {import('./types.js').Effect[]} collected
+ * @returns {void}
+ */
+function collect_effects(effect, filter_flags, collected) {
+	var effects = effect.effects;
+	if (effects === null) {
+		return;
+	}
+	var i, s, child, flags;
+	var render = [];
+	var user = [];
+
+	for (i = 0; i < effects.length; i++) {
+		child = effects[i];
+		flags = child.f;
+		if ((flags & CLEAN) !== 0) {
+			continue;
+		}
+
+		if ((flags & PRE_EFFECT) !== 0) {
+			if ((filter_flags & PRE_EFFECT) !== 0) {
+				collected.push(child);
 			}
+			collect_effects(child, filter_flags, collected);
+		} else if ((flags & RENDER_EFFECT) !== 0) {
+			render.push(child);
+		} else if ((flags & EFFECT) !== 0) {
+			user.push(child);
 		}
 	}
 
-	signal.f |= EFFECT_RAN;
+	if (render.length > 0) {
+		if ((filter_flags & RENDER_EFFECT) !== 0) {
+			collected.push(...render);
+		}
+		for (s = 0; s < render.length; s++) {
+			collect_effects(render[s], filter_flags, collected);
+		}
+	}
+	if (user.length > 0) {
+		if ((filter_flags & EFFECT) !== 0) {
+			collected.push(...user);
+		}
+		for (s = 0; s < user.length; s++) {
+			collect_effects(user[s], filter_flags, collected);
+		}
+	}
 }
 
 /**
+ * @param {import('./types.js').Effect} effect
  * @returns {void}
  */
-export function flush_local_render_effects() {
-	const effects = [];
-	for (let i = 0; i < current_queued_pre_and_render_effects.length; i++) {
-		const effect = current_queued_pre_and_render_effects[i];
-		if ((effect.f & RENDER_EFFECT) !== 0 && effect.ctx === current_component_context) {
-			effects.push(effect);
-			current_queued_pre_and_render_effects.splice(i, 1);
-			i--;
-		}
-	}
-	flush_queued_effects(effects);
+export function flush_local_render_effects(effect) {
+	/**
+	 * @type {import("./types.js").Effect[]}
+	 */
+	var render_effects = [];
+	collect_effects(effect, RENDER_EFFECT, render_effects);
+	flush_queued_effects(render_effects);
 }
 
 /**
- * @param {null | import('./types.js').ComponentContext} context
+ * @param {import('./types.js').Effect} effect
  * @returns {void}
  */
-export function flush_local_pre_effects(context) {
-	const effects = [];
-	for (let i = 0; i < current_queued_pre_and_render_effects.length; i++) {
-		const effect = current_queued_pre_and_render_effects[i];
-		if ((effect.f & PRE_EFFECT) !== 0 && effect.ctx === context) {
-			effects.push(effect);
-			current_queued_pre_and_render_effects.splice(i, 1);
-			i--;
-		}
-	}
-	flush_queued_effects(effects);
+export function flush_local_pre_effects(effect) {
+	/**
+	 * @type {import("./types.js").Effect[]}
+	 */
+	var pre_effects = [];
+	collect_effects(effect, PRE_EFFECT, pre_effects);
+	flush_queued_effects(pre_effects);
 }
 
 /**
@@ -696,7 +738,7 @@ export function get(signal) {
 			current_untracked_writes.includes(signal)
 		) {
 			set_signal_status(current_effect, DIRTY);
-			schedule_effect(current_effect, false);
+			schedule_effect(current_effect);
 		}
 	}
 
@@ -772,7 +814,7 @@ export function mark_subtree_inert(signal, inert) {
 	if (is_already_inert !== inert) {
 		signal.f ^= INERT;
 		if (!inert && (flags & CLEAN) === 0) {
-			schedule_effect(signal, false);
+			schedule_effect(signal);
 		}
 	}
 
@@ -819,7 +861,7 @@ export function mark_reactions(signal, to_status, force_schedule) {
 					force_schedule
 				);
 			} else {
-				schedule_effect(/** @type {import('#client').Effect} */ (reaction), false);
+				schedule_effect(/** @type {import('#client').Effect} */ (reaction));
 			}
 		}
 	}
@@ -1075,7 +1117,7 @@ export function pop(component) {
 		if (effects !== null) {
 			context_stack_item.e = null;
 			for (let i = 0; i < effects.length; i++) {
-				schedule_effect(effects[i], false);
+				schedule_effect(effects[i]);
 			}
 		}
 		current_component_context = context_stack_item.p;
@@ -1201,7 +1243,7 @@ let warned_inspect_changed = false;
 export function inspect(get_value, inspect = console.log) {
 	let initial = true;
 
-	pre_effect(() => {
+	user_pre_effect(() => {
 		const fn = () => {
 			const value = untrack(() => get_value().map((v) => deep_unstate(v)));
 			if (value.length === 2 && typeof value[1] === 'function' && !warned_inspect_changed) {
