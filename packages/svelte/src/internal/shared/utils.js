@@ -13,14 +13,14 @@ export function is_promise(value) {
 	return typeof value?.then === 'function';
 }
 
+/** @param {Function} fn */
+export function run(fn) {
+	return fn();
+}
+
 /** @param {Array<() => void>} arr */
 export function run_all(arr) {
 	for (var i = 0; i < arr.length; i++) {
 		arr[i]();
 	}
-}
-
-/** @param {Function} fn */
-export function run(fn) {
-	return fn();
 }

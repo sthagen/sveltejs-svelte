@@ -19,6 +19,8 @@ export const TRANSITION_GLOBAL = 1 << 2;
 export const TEMPLATE_FRAGMENT = 1;
 export const TEMPLATE_USE_IMPORT_NODE = 1 << 1;
 
+export const UNINITIALIZED = Symbol();
+
 /** List of Element events that will be delegated */
 export const DelegatedEvents = [
 	'beforeinput',
@@ -95,7 +97,6 @@ export const DOMBooleanAttributes = [
 ];
 
 export const namespace_svg = 'http://www.w3.org/2000/svg';
-export const namespace_html = 'http://www.w3.org/1999/xhtml';
 
 // while `input` is also an interactive element, it is never moved by the browser, so we don't need to check for it
 export const interactive_elements = new Set([
