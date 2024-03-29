@@ -46,7 +46,6 @@ function create_effect(type, fn, sync) {
 		f: type | DIRTY,
 		fn,
 		effects: null,
-		deriveds: null,
 		teardown: null,
 		ctx: current_component_context,
 		transitions: null
@@ -238,11 +237,22 @@ export function destroy_effect(effect) {
 		remove(effect.dom);
 	}
 
+	var parent = effect.parent;
+
+	if (parent !== null && (effect.f & BRANCH_EFFECT) !== 0) {
+		var effects = parent.effects;
+		if (effects !== null) {
+			var index = effects.indexOf(effect);
+			effects.splice(index, 1);
+		}
+	}
+
 	effect.effects =
 		effect.teardown =
 		effect.ctx =
 		effect.dom =
 		effect.deps =
+		effect.parent =
 		// @ts-expect-error
 		effect.fn =
 			null;
