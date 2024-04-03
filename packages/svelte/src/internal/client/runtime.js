@@ -21,7 +21,8 @@ import {
 	INERT,
 	BRANCH_EFFECT,
 	STATE_SYMBOL,
-	BLOCK_EFFECT
+	BLOCK_EFFECT,
+	ROOT_EFFECT
 } from './constants.js';
 import { flush_tasks } from './dom/task.js';
 import { add_owner } from './dev/ownership.js';
@@ -170,6 +171,7 @@ export function check_dirtiness(reaction) {
 
 	if ((flags & MAYBE_DIRTY) !== 0) {
 		var dependencies = reaction.deps;
+		var is_unowned = (flags & UNOWNED) !== 0;
 
 		if (dependencies !== null) {
 			var length = dependencies.length;
@@ -190,7 +192,6 @@ export function check_dirtiness(reaction) {
 				// if our dependency write version is higher. If it is then we can assume
 				// that state has changed to a newer version and thus this unowned signal
 				// is also dirty.
-				var is_unowned = (flags & UNOWNED) !== 0;
 				var version = dependency.version;
 
 				if (is_unowned && version > /** @type {import('#client').Derived} */ (reaction).version) {
@@ -200,7 +201,10 @@ export function check_dirtiness(reaction) {
 			}
 		}
 
-		set_signal_status(reaction, CLEAN);
+		// Unowned signals are always maybe dirty, as we instead check their dependency versions.
+		if (!is_unowned) {
+			set_signal_status(reaction, CLEAN);
+		}
 	}
 
 	return false;
@@ -390,7 +394,7 @@ export function execute_effect(effect) {
 			destroy_effect_children(effect);
 		}
 
-		effect.teardown?.();
+		effect.teardown?.call(null);
 		var teardown = execute_reaction_fn(effect);
 		effect.teardown = typeof teardown === 'function' ? teardown : null;
 	} finally {
@@ -692,7 +696,7 @@ export function get(signal) {
 	// Register the dependency on the current reaction signal.
 	if (
 		current_reaction !== null &&
-		(current_reaction.f & BRANCH_EFFECT) === 0 &&
+		(current_reaction.f & (BRANCH_EFFECT | ROOT_EFFECT)) === 0 &&
 		!current_untracking
 	) {
 		const unowned = (current_reaction.f & UNOWNED) !== 0;
@@ -741,6 +745,7 @@ export function get(signal) {
 			update_derived(/** @type {import('./types.js').Derived} **/ (signal), false);
 		}
 	}
+
 	return signal.v;
 }
 

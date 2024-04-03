@@ -1,5 +1,5 @@
-import { test } from '../../test';
 import { flushSync } from 'svelte';
+import { test } from '../../test';
 import { log } from './log.js';
 
 export default test({
@@ -8,13 +8,24 @@ export default test({
 	},
 
 	async test({ assert, target }) {
-		const [b1] = target.querySelectorAll('button');
+		const [b1, b2] = target.querySelectorAll('button');
+
 		flushSync(() => {
 			b1.click();
 		});
+
+		assert.deepEqual(log, [0]);
+
+		flushSync(() => {
+			b2.click();
+		});
+
+		assert.deepEqual(log, [0, 'cleanup']);
+
 		flushSync(() => {
 			b1.click();
 		});
-		assert.deepEqual(log, ['init 0', 'cleanup 2', null, 'init 2', 'cleanup 4', null, 'init 4']);
+
+		assert.deepEqual(log, [0, 'cleanup']);
 	}
 });
