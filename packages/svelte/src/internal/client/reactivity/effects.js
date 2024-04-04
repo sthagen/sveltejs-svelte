@@ -27,7 +27,6 @@ import {
 	IS_ELSEIF
 } from '../constants.js';
 import { set } from './sources.js';
-import { noop } from '../../shared/utils.js';
 import { remove } from '../dom/reconciler.js';
 
 /**
@@ -295,57 +294,17 @@ export function destroy_effect(effect) {
  * completed, and if the state change is reversed then we _resume_ it.
  * A paused effect does not update, and the DOM subtree becomes inert.
  * @param {import('#client').Effect} effect
- * @param {() => void} callback
+ * @param {() => void} [callback]
  */
-export function pause_effect(effect, callback = noop) {
+export function pause_effect(effect, callback) {
 	/** @type {import('#client').TransitionManager[]} */
 	var transitions = [];
 
 	pause_children(effect, transitions, true);
 
-	out(transitions, () => {
+	run_out_transitions(transitions, () => {
 		destroy_effect(effect);
-		callback();
-	});
-}
-
-/**
- * Pause multiple effects simultaneously, and coordinate their
- * subsequent destruction. Used in each blocks
- * @param {import('#client').Effect[]} effects
- * @returns {import('#client').TransitionManager[]}
- */
-export function get_out_transitions(effects) {
-	/** @type {import('#client').TransitionManager[]} */
-	var transitions = [];
-
-	for (var i = 0; i < effects.length; i++) {
-		pause_children(effects[i], transitions, true);
-	}
-
-	return transitions;
-}
-
-/**
- * @param {import('#client').Effect[]} effects
- */
-export function destroy_effects(effects) {
-	for (var i = 0; i < effects.length; i++) {
-		destroy_effect(effects[i]);
-	}
-}
-
-/**
- * Pause multiple effects simultaneously, and coordinate their
- * subsequent destruction. Used in each blocks
- * @param {import('#client').Effect[]} effects
- * @param {import('#client').TransitionManager[]} transitions
- * @param {() => void} callback
- */
-export function pause_effects(effects, transitions, callback = noop) {
-	out(transitions, () => {
-		destroy_effects(effects);
-		callback();
+		if (callback) callback();
 	});
 }
 
@@ -353,7 +312,7 @@ export function pause_effects(effects, transitions, callback = noop) {
  * @param {import('#client').TransitionManager[]} transitions
  * @param {() => void} fn
  */
-function out(transitions, fn) {
+export function run_out_transitions(transitions, fn) {
 	var remaining = transitions.length;
 	if (remaining > 0) {
 		var check = () => --remaining || fn();
@@ -370,7 +329,7 @@ function out(transitions, fn) {
  * @param {import('#client').TransitionManager[]} transitions
  * @param {boolean} local
  */
-function pause_children(effect, transitions, local) {
+export function pause_children(effect, transitions, local) {
 	if ((effect.f & INERT) !== 0) return;
 	effect.f ^= INERT;
 
@@ -385,12 +344,13 @@ function pause_children(effect, transitions, local) {
 	var child = effect.first;
 
 	while (child !== null) {
+		var sibling = child.next;
 		var transparent = (child.f & IS_ELSEIF) !== 0 || (child.f & BRANCH_EFFECT) !== 0;
 		// TODO we don't need to call pause_children recursively with a linked list in place
 		// it's slightly more involved though as we have to account for `transparent` changing
 		// through the tree.
 		pause_children(child, transitions, transparent ? local : false);
-		child = child.next;
+		child = sibling;
 	}
 }
 

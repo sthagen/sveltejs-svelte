@@ -300,6 +300,7 @@ declare module 'svelte' {
 	 * */
 	export function mount<Props extends Record<string, any>, Exports extends Record<string, any>, Events extends Record<string, any>>(component: ComponentType<SvelteComponent<Props, Events, any>>, options: {
 		target: Document | Element | ShadowRoot;
+		anchor?: Node | undefined;
 		props?: Props | undefined;
 		events?: { [Property in keyof Events]: (e: Events[Property]) => any; } | undefined;
 		context?: Map<any, any> | undefined;
@@ -1845,7 +1846,7 @@ declare module 'svelte/reactivity' {
 }
 
 declare module 'svelte/server' {
-	export function render(component: (...args: any[]) => void, options: {
+	export function render(component: typeof import('svelte').SvelteComponent, options: {
 		props: Record<string, any>;
 		context?: Map<any, any>;
 	}): RenderOutput;
