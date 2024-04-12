@@ -1,5 +1,25 @@
 # svelte
 
+## 5.0.0-next.100
+
+### Patch Changes
+
+- fix: further improvements to hmr component key generation ([#11129](https://github.com/sveltejs/svelte/pull/11129))
+
+## 5.0.0-next.99
+
+### Patch Changes
+
+- fix: use correct meta property for hmr key ([#11125](https://github.com/sveltejs/svelte/pull/11125))
+
+## 5.0.0-next.98
+
+### Patch Changes
+
+- fix: use keys for hmr modules ([#11123](https://github.com/sveltejs/svelte/pull/11123))
+
+- fix: addresses reactive Set bug in certain engines ([#11120](https://github.com/sveltejs/svelte/pull/11120))
+
 ## 5.0.0-next.97
 
 ### Patch Changes

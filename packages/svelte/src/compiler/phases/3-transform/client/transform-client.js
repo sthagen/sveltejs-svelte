@@ -424,21 +424,28 @@ export function client_component(source, analysis, options) {
 
 	if (options.hmr) {
 		body.push(
-			b.export_default(
-				b.conditional(
-					b.import_meta_hot(),
-					b.call('$.hmr', b.member(b.import_meta_hot(), b.id('data')), b.id(analysis.name)),
-					b.id(analysis.name)
-				)
-			),
 			b.if(
-				b.import_meta_hot(),
-				b.stmt(b.call('import.meta.hot.acceptExports', b.literal('default')))
+				b.id('import.meta.hot'),
+				b.block([
+					b.const(b.id('s'), b.call('$.source', b.id(analysis.name))),
+					b.stmt(b.assignment('=', b.id(analysis.name), b.call('$.hmr', b.id('s')))),
+					b.stmt(
+						b.call(
+							'import.meta.hot.accept',
+							b.arrow(
+								[b.id('module')],
+								b.block([
+									b.stmt(b.call('$.set', b.id('s'), b.member(b.id('module'), b.id('default'))))
+								])
+							)
+						)
+					)
+				])
 			)
 		);
-	} else {
-		body.push(b.export_default(b.id(analysis.name)));
 	}
+
+	body.push(b.export_default(b.id(analysis.name)));
 
 	if (options.dev) {
 		if (options.filename) {
