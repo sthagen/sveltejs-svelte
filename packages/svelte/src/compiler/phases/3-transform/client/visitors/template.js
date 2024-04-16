@@ -917,6 +917,15 @@ function serialize_bind_this(bind_this, context, node) {
 
 	/** @type {import('estree').Expression[]} */
 	const args = [node, b.arrow([b.id('$$value'), ...ids], update), b.arrow([...ids], bind_this_id)];
+	// If we're mutating a property, then it might already be non-existent.
+	// If we make all the object nodes optional, then it avoids any runtime exceptions.
+	/** @type {import('estree').Expression | import('estree').Super} */
+	let bind_node = bind_this_id;
+
+	while (bind_node?.type === 'MemberExpression') {
+		bind_node.optional = true;
+		bind_node = bind_node.object;
+	}
 	if (each_ids.size) {
 		args.push(b.thunk(b.array(Array.from(each_ids.values()).map((id) => id[1]))));
 	}
@@ -2277,27 +2286,24 @@ export const template_visitors = {
 			for (const path of paths) {
 				const name = /** @type {import('estree').Identifier} */ (path.node).name;
 				const binding = /** @type {import('#compiler').Binding} */ (context.state.scope.get(name));
+				const needs_derived = path.has_default_value; // to ensure that default value is only called once
+				const fn = b.thunk(
+					/** @type {import('estree').Expression} */ (context.visit(path.expression?.(unwrapped)))
+				);
+
 				declarations.push(
-					b.let(
-						path.node,
-						b.thunk(
-							/** @type {import('estree').Expression} */ (
-								context.visit(path.expression?.(unwrapped))
-							)
-						)
-					)
+					b.let(path.node, needs_derived ? b.call('$.derived_safe_equal', fn) : fn)
+				);
+				binding.expression = needs_derived ? b.call('$.get', b.id(name)) : b.call(name);
+				binding.mutation = create_mutation(
+					/** @type {import('estree').Pattern} */ (path.update_expression(unwrapped))
 				);
 
 				// we need to eagerly evaluate the expression in order to hit any
 				// 'Cannot access x before initialization' errors
 				if (context.state.options.dev) {
-					declarations.push(b.stmt(b.call(name)));
+					declarations.push(b.stmt(binding.expression));
 				}
-
-				binding.expression = b.call(name);
-				binding.mutation = create_mutation(
-					/** @type {import('estree').Pattern} */ (path.update_expression(unwrapped))
-				);
 			}
 		}
 
@@ -2486,24 +2492,23 @@ export const template_visitors = {
 			for (const path of paths) {
 				const name = /** @type {import('estree').Identifier} */ (path.node).name;
 				const binding = /** @type {import('#compiler').Binding} */ (context.state.scope.get(name));
-				declarations.push(
-					b.let(
-						path.node,
-						b.thunk(
-							/** @type {import('estree').Expression} */ (
-								context.visit(path.expression?.(b.maybe_call(b.id(arg_alias))))
-							)
-						)
+				const needs_derived = path.has_default_value; // to ensure that default value is only called once
+				const fn = b.thunk(
+					/** @type {import('estree').Expression} */ (
+						context.visit(path.expression?.(b.maybe_call(b.id(arg_alias))))
 					)
 				);
+
+				declarations.push(
+					b.let(path.node, needs_derived ? b.call('$.derived_safe_equal', fn) : fn)
+				);
+				binding.expression = needs_derived ? b.call('$.get', b.id(name)) : b.call(name);
 
 				// we need to eagerly evaluate the expression in order to hit any
 				// 'Cannot access x before initialization' errors
 				if (context.state.options.dev) {
-					declarations.push(b.stmt(b.call(name)));
+					declarations.push(b.stmt(binding.expression));
 				}
-
-				binding.expression = b.call(name);
 			}
 		}
 

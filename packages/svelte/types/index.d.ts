@@ -297,7 +297,6 @@ declare module 'svelte' {
 	export function flushSync(fn?: (() => void) | undefined): void;
 	/** Anything except a function */
 	type NotFunction<T> = T extends Function ? never : T;
-	export function unstate<T>(value: T): T;
 	/**
 	 * Mounts a component to the given target and returns the exports and potentially the props (if compiled with `accessors: true`) of the component
 	 *
@@ -542,6 +541,8 @@ declare module 'svelte/compiler' {
 			 */
 			runes: boolean;
 		};
+		/** The AST */
+		ast: any;
 	}
 
 	interface Warning {
@@ -676,6 +677,13 @@ declare module 'svelte/compiler' {
 		 * @default false
 		 */
 		hmr?: boolean;
+		/**
+		 * If `true`, returns the modern version of the AST.
+		 * Will become `true` by default in Svelte 6, and the option will be removed in Svelte 7.
+		 *
+		 * @default false
+		 */
+		modernAst?: boolean;
 	}
 
 	interface ModuleCompileOptions {
@@ -2477,6 +2485,13 @@ declare module 'svelte/types/compiler/interfaces' {
 		 * @default false
 		 */
 		hmr?: boolean;
+		/**
+		 * If `true`, returns the modern version of the AST.
+		 * Will become `true` by default in Svelte 6, and the option will be removed in Svelte 7.
+		 *
+		 * @default false
+		 */
+		modernAst?: boolean;
 	}
 
 	interface ModuleCompileOptions {
@@ -2551,6 +2566,26 @@ declare namespace $state {
 	 */
 	export function frozen<T>(initial: T): Readonly<T>;
 	export function frozen<T>(): Readonly<T> | undefined;
+	/**
+	 * To take a static snapshot of a deeply reactive `$state` proxy, use `$state.snapshot`:
+	 *
+	 * Example:
+	 * ```ts
+	 * <script>
+	 *   let counter = $state({ count: 0 });
+	 *
+	 *   function onclick() {
+	 *     // Will log `{ count: ... }` rather than `Proxy { ... }`
+	 *     console.log($state.snapshot(counter));
+	 *   };
+	 * </script>
+	 * ```
+	 *
+	 * https://svelte-5-preview.vercel.app/docs/runes#$state.snapshot
+	 *
+	 * @param state The value to snapshot
+	 */
+	export function snapshot<T>(state: T): T;
 }
 
 /**
