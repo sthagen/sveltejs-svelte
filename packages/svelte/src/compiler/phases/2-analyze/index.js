@@ -1,6 +1,6 @@
 import is_reference from 'is-reference';
 import { walk } from 'zimmerframe';
-import { error } from '../../errors.js';
+import * as e from '../../errors.js';
 import {
 	extract_identifiers,
 	extract_all_identifiers_from_expression,
@@ -24,6 +24,7 @@ import { analyze_css } from './css/css-analyze.js';
 import { prune } from './css/css-prune.js';
 import { hash } from './utils.js';
 import { warn_unused } from './css/css-warn.js';
+import { extract_svelte_ignore } from '../../utils/extract_svelte_ignore.js';
 
 /**
  * @param {import('#compiler').Script | null} script
@@ -229,7 +230,7 @@ export function analyze_module(ast, options) {
 	for (const [name, references] of scope.references) {
 		if (name[0] !== '$' || ReservedKeywords.includes(name)) continue;
 		if (name === '$' || name[1] === '$') {
-			error(references[0].node, 'illegal-global', name);
+			e.illegal_global(references[0].node, name);
 		}
 	}
 
@@ -281,7 +282,7 @@ export function analyze_component(root, source, options) {
 	for (const [name, references] of module.scope.references) {
 		if (name[0] !== '$' || ReservedKeywords.includes(name)) continue;
 		if (name === '$' || name[1] === '$') {
-			error(references[0].node, 'illegal-global', name);
+			e.illegal_global(references[0].node, name);
 		}
 
 		const store_name = name.slice(1);
@@ -321,16 +322,16 @@ export function analyze_component(root, source, options) {
 			}
 
 			if (is_nested_store_subscription_node) {
-				error(is_nested_store_subscription_node, 'illegal-store-subscription');
+				e.illegal_store_subscription(is_nested_store_subscription_node);
 			}
 
 			if (options.runes !== false) {
 				if (declaration === null && /[a-z]/.test(store_name[0])) {
-					error(references[0].node, 'illegal-global', name);
+					e.illegal_global(references[0].node, name);
 				} else if (declaration !== null && Runes.includes(/** @type {any} */ (name))) {
 					for (const { node, path } of references) {
 						if (path.at(-1)?.type === 'CallExpression') {
-							warn(warnings, node, [], 'store-with-rune-name', store_name);
+							warn(warnings, node, 'store-with-rune-name', store_name);
 						}
 					}
 				}
@@ -345,7 +346,7 @@ export function analyze_component(root, source, options) {
 						// const state = $state(0) is valid
 						get_rune(/** @type {import('estree').Node} */ (path.at(-1)), module.scope) === null
 					) {
-						error(node, 'illegal-subscription');
+						e.illegal_subscription(node);
 					}
 				}
 			}
@@ -407,18 +408,18 @@ export function analyze_component(root, source, options) {
 	};
 
 	if (!options.customElement && root.options?.customElement) {
-		warn(analysis.warnings, root.options, [], 'missing-custom-element-compile-option');
+		warn(analysis.warnings, root.options, 'missing-custom-element-compile-option');
 	}
 
 	if (analysis.runes) {
 		const props_refs = module.scope.references.get('$$props');
 		if (props_refs) {
-			error(props_refs[0].node, 'invalid-legacy-props');
+			e.invalid_legacy_props(props_refs[0].node);
 		}
 
 		const rest_props_refs = module.scope.references.get('$$restProps');
 		if (rest_props_refs) {
-			error(rest_props_refs[0].node, 'invalid-legacy-rest-props');
+			e.invalid_legacy_rest_props(rest_props_refs[0].node);
 		}
 
 		for (const { ast, scope, scopes } of [module, instance, template]) {
@@ -433,7 +434,8 @@ export function analyze_component(root, source, options) {
 				component_slots: new Set(),
 				expression: null,
 				private_derived_state: [],
-				function_depth: scope.function_depth
+				function_depth: scope.function_depth,
+				ignores: new Set()
 			};
 
 			walk(
@@ -451,7 +453,7 @@ export function analyze_component(root, source, options) {
 							({ alias, name }) => (binding.prop_alias ?? binding.node.name) === (alias ?? name)
 						)
 					) {
-						error(binding.node, 'conflicting-property-name');
+						e.conflicting_property_name(binding.node);
 					}
 				}
 			}
@@ -475,7 +477,8 @@ export function analyze_component(root, source, options) {
 				component_slots: new Set(),
 				expression: null,
 				private_derived_state: [],
-				function_depth: scope.function_depth
+				function_depth: scope.function_depth,
+				ignores: new Set()
 			};
 
 			walk(
@@ -495,7 +498,7 @@ export function analyze_component(root, source, options) {
 					(r) => r.node !== binding.node && r.path.at(-1)?.type !== 'ExportSpecifier'
 				);
 				if (!references.length && !instance.scope.declarations.has(`$${name}`)) {
-					warn(warnings, binding.node, [], 'unused-export-let', name);
+					warn(warnings, binding.node, 'unused-export-let', name);
 				}
 			}
 		}
@@ -504,7 +507,7 @@ export function analyze_component(root, source, options) {
 	}
 
 	if (analysis.uses_render_tags && (analysis.uses_slots || analysis.slot_names.size > 0)) {
-		error(analysis.slot_names.values().next().value, 'conflicting-slot-usage');
+		e.conflicting_slot_usage(analysis.slot_names.values().next().value);
 	}
 
 	// warn on any nonstate declarations that are a) reassigned and b) referenced in the template
@@ -535,7 +538,7 @@ export function analyze_component(root, source, options) {
 									type === 'AwaitBlock' ||
 									type === 'KeyBlock'
 								) {
-									warn(warnings, binding.node, [], 'non-state-reference', name);
+									warn(warnings, binding.node, 'non-state-reference', name);
 									continue outer;
 								}
 							}
@@ -543,7 +546,7 @@ export function analyze_component(root, source, options) {
 						}
 					}
 
-					warn(warnings, binding.node, [], 'non-state-reference', name);
+					warn(warnings, binding.node, 'non-state-reference', name);
 					continue outer;
 				}
 			}
@@ -557,7 +560,13 @@ export function analyze_component(root, source, options) {
 		for (const element of analysis.elements) {
 			prune(analysis.css.ast, element);
 		}
-		warn_unused(analysis.css.ast, analysis.warnings);
+
+		if (
+			!analysis.css.ast.content.comment ||
+			!extract_svelte_ignore(analysis.css.ast.content.comment.data).includes('css-unused-selector')
+		) {
+			warn_unused(analysis.css.ast, analysis.warnings);
+		}
 
 		outer: for (const element of analysis.elements) {
 			if (element.metadata.scoped) {
@@ -679,7 +688,7 @@ const legacy_scope_tweaker = {
 				(d) => d.scope === state.analysis.module.scope && d.declaration_kind !== 'const'
 			)
 		) {
-			warn(state.analysis.warnings, node, path, 'module-script-reactive-declaration');
+			warn(state.analysis.warnings, node, 'module-script-reactive-declaration');
 		}
 
 		if (
@@ -1045,6 +1054,65 @@ const function_visitor = (node, context) => {
 
 /** @type {import('./types').Visitors} */
 const common_visitors = {
+	_(node, context) {
+		// @ts-expect-error
+		const comments = /** @type {import('estree').Comment[]} */ (node.leadingComments);
+
+		if (comments) {
+			/** @type {string[]} */
+			const ignores = [];
+
+			for (const comment of comments) {
+				ignores.push(...extract_svelte_ignore(comment.value));
+			}
+
+			if (ignores.length > 0) {
+				// @ts-expect-error see below
+				node.ignores = new Set([...context.state.ignores, ...ignores]);
+			}
+		}
+
+		// @ts-expect-error
+		if (node.ignores) {
+			context.next({
+				...context.state,
+				// @ts-expect-error see below
+				ignores: node.ignores
+			});
+		} else if (context.state.ignores.size > 0) {
+			// @ts-expect-error
+			node.ignores = context.state.ignores;
+		}
+	},
+	Fragment(node, context) {
+		/** @type {string[]} */
+		let ignores = [];
+
+		for (const child of node.nodes) {
+			if (child.type === 'Text' && child.data.trim() === '') {
+				continue;
+			}
+
+			if (child.type === 'Comment') {
+				ignores.push(...extract_svelte_ignore(child.data));
+			} else {
+				const combined_ignores = new Set(context.state.ignores);
+				for (const ignore of ignores) combined_ignores.add(ignore);
+
+				if (combined_ignores.size > 0) {
+					// TODO this is a grotesque hack that's made necessary by the fact that
+					// we can't call `context.visit(...)` here, because we do the convoluted
+					// visitor merging thing. I'm increasingly of the view that we should
+					// rearchitect this stuff and have a single visitor per node. It'd be
+					// more efficient and much simpler.
+					// @ts-expect-error
+					child.ignores = combined_ignores;
+				}
+
+				ignores = [];
+			}
+		}
+	},
 	Attribute(node, context) {
 		if (node.value === true) return;
 
@@ -1142,7 +1210,7 @@ const common_visitors = {
 					binding.kind === 'derived') &&
 				context.state.function_depth === binding.scope.function_depth
 			) {
-				warn(context.state.analysis.warnings, node, context.path, 'static-state-reference');
+				warn(context.state.analysis.warnings, node, 'static-state-reference');
 			}
 		}
 	},
@@ -1425,7 +1493,7 @@ function order_reactive_statements(unsorted_reactive_declarations) {
 	const cycle = check_graph_for_cycles(edges);
 	if (cycle?.length) {
 		const declaration = /** @type {Tuple[]} */ (lookup.get(cycle[0]))[0];
-		error(declaration[0], 'cyclical-reactive-declaration', cycle);
+		e.cyclical_reactive_declaration(declaration[0], cycle.join(' → '));
 	}
 
 	// We use a map and take advantage of the fact that the spec says insertion order is preserved when iterating
