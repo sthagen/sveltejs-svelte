@@ -236,7 +236,7 @@ export function analyze_module(ast, options) {
 
 	walk(
 		/** @type {import('estree').Node} */ (ast),
-		{ scope },
+		{ scope, analysis: { runes: true } },
 		// @ts-expect-error TODO clean this mess up
 		merge(set_scope(scopes), validation_runes_js, runes_scope_js_tweaker)
 	);
@@ -374,7 +374,7 @@ export function analyze_component(root, source, options) {
 		inject_styles: options.css === 'injected' || options.customElement,
 		accessors: options.customElement
 			? true
-			: !!options.accessors ||
+			: (runes ? false : !!options.accessors) ||
 				// because $set method needs accessors
 				!!options.legacy?.componentApi,
 		reactive_statements: new Map(),
@@ -395,8 +395,20 @@ export function analyze_component(root, source, options) {
 		source
 	};
 
-	if (!options.customElement && root.options?.customElement) {
-		w.options_missing_custom_element(root.options);
+	if (root.options) {
+		for (const attribute of root.options.attributes) {
+			if (attribute.name === 'accessors') {
+				w.options_deprecated_accessors(attribute);
+			}
+
+			if (attribute.name === 'customElement' && !options.customElement) {
+				w.options_missing_custom_element(attribute);
+			}
+
+			if (attribute.name === 'immutable') {
+				w.options_deprecated_immutable(attribute);
+			}
+		}
 	}
 
 	if (analysis.runes) {
@@ -862,7 +874,7 @@ const legacy_scope_tweaker = {
 	}
 };
 
-/** @type {import('zimmerframe').Visitors<import('#compiler').SvelteNode, { scope: Scope }>} */
+/** @type {import('zimmerframe').Visitors<import('#compiler').SvelteNode, { scope: Scope, analysis: { runes: true } }>} */
 const runes_scope_js_tweaker = {
 	VariableDeclarator(node, { state }) {
 		if (node.init?.type !== 'CallExpression') return;
