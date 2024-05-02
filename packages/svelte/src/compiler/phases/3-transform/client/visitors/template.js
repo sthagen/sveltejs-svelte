@@ -7,12 +7,7 @@ import {
 	unwrap_optional
 } from '../../../../utils/ast.js';
 import { binding_properties } from '../../../bindings.js';
-import {
-	clean_nodes,
-	determine_namespace_for_children,
-	escape_html,
-	infer_namespace
-} from '../../utils.js';
+import { clean_nodes, determine_namespace_for_children, infer_namespace } from '../../utils.js';
 import { DOMProperties, PassiveEvents, VoidElements } from '../../../constants.js';
 import { is_custom_element_node, is_element_node } from '../../../nodes.js';
 import * as b from '../../../../utils/builders.js';
@@ -38,6 +33,7 @@ import {
 	TRANSITION_IN,
 	TRANSITION_OUT
 } from '../../../../../constants.js';
+import { escape_html } from '../../../../../escaping.js';
 import { regex_is_valid_identifier } from '../../../patterns.js';
 import { javascript_visitors_runes } from './javascript-runes.js';
 import { sanitize_template_string } from '../../../../utils/sanitize_template_string.js';
@@ -835,10 +831,7 @@ function serialize_inline_component(node, component_name, context) {
 
 		if (slot_name === 'default') {
 			push_prop(
-				b.init(
-					'children',
-					context.state.options.dev ? b.call('$.add_snippet_symbol', slot_fn) : slot_fn
-				)
+				b.init('children', context.state.options.dev ? b.call('$.wrap_snippet', slot_fn) : slot_fn)
 			);
 		} else {
 			serialized_slots.push(b.init(slot_name, slot_fn));
@@ -1984,7 +1977,7 @@ export const template_visitors = {
 							` ${attribute.name}${
 								DOMBooleanAttributes.includes(name) && literal_value === true
 									? ''
-									: `="${literal_value === true ? '' : escape_html(String(literal_value), true)}"`
+									: `="${literal_value === true ? '' : escape_html(literal_value, true)}"`
 							}`
 						);
 						continue;
@@ -2566,16 +2559,20 @@ export const template_visitors = {
 			.../** @type {import('estree').BlockStatement} */ (context.visit(node.body)).body
 		]);
 
-		const path = context.path;
-		// If we're top-level, then we can create a function for the snippet so that it can be referenced
-		// in the props declaration (default value pattern).
-		if (path.length === 1 && path[0].type === 'Fragment') {
-			context.state.init.push(b.function_declaration(node.expression, args, body));
-		} else {
-			context.state.init.push(b.const(node.expression, b.arrow(args, body)));
-		}
+		/** @type {import('estree').Expression} */
+		let snippet = b.arrow(args, body);
+
 		if (context.state.options.dev) {
-			context.state.init.push(b.stmt(b.call('$.add_snippet_symbol', node.expression)));
+			snippet = b.call('$.wrap_snippet', snippet);
+		}
+
+		const declaration = b.var(node.expression, snippet);
+
+		// Top-level snippets are hoisted so they can be referenced in the `<script>`
+		if (context.path.length === 1 && context.path[0].type === 'Fragment') {
+			context.state.analysis.top_level_snippets.push(declaration);
+		} else {
+			context.state.init.push(declaration);
 		}
 	},
 	FunctionExpression: function_visitor,

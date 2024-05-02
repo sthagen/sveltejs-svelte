@@ -384,6 +384,7 @@ export function analyze_component(root, source, options) {
 		reactive_statements: new Map(),
 		binding_groups: new Map(),
 		slot_names: new Map(),
+		top_level_snippets: [],
 		css: {
 			ast: root.css,
 			hash: root.css
@@ -868,6 +869,16 @@ const legacy_scope_tweaker = {
 					const binding = /** @type {import('#compiler').Binding} */ (state.scope.get(id.name));
 					binding.kind = 'bindable_prop';
 				}
+			}
+		}
+	},
+	StyleDirective(node, { state }) {
+		// the case for node.value different from true is already covered by the Identifier visitor
+		if (node.value === true) {
+			// get the binding for node.name and change the binding to state
+			let binding = state.scope.get(node.name);
+			if (binding?.mutated && binding.kind === 'normal') {
+				binding.kind = 'state';
 			}
 		}
 	}
