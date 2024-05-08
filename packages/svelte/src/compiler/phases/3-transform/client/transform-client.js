@@ -8,6 +8,7 @@ import { javascript_visitors_runes } from './visitors/javascript-runes.js';
 import { javascript_visitors_legacy } from './visitors/javascript-legacy.js';
 import { serialize_get_binding } from './utils.js';
 import { render_stylesheet } from '../css/index.js';
+import { getLocator } from 'locate-character';
 
 /**
  * This function ensures visitor sets don't accidentally clobber each other
@@ -47,6 +48,7 @@ export function client_component(source, analysis, options) {
 		scopes: analysis.template.scopes,
 		hoisted: [b.import_all('$', 'svelte/internal/client')],
 		node: /** @type {any} */ (null), // populated by the root node
+		source_locator: getLocator(source, { offsetLine: 1 }),
 		// these should be set by create_block - if they're called outside, it's a bug
 		get before_init() {
 			/** @type {any[]} */
@@ -85,6 +87,14 @@ export function client_component(source, analysis, options) {
 			const a = [];
 			a.push = () => {
 				throw new Error('template.push should not be called outside create_block');
+			};
+			return a;
+		},
+		get locations() {
+			/** @type {any[]} */
+			const a = [];
+			a.push = () => {
+				throw new Error('locations.push should not be called outside create_block');
 			};
 			return a;
 		},
@@ -429,6 +439,10 @@ export function client_component(source, analysis, options) {
 	);
 
 	if (options.hmr) {
+		const accept_fn = b.arrow(
+			[b.id('module')],
+			b.block([b.stmt(b.call('$.set', b.id('s'), b.member(b.id('module'), b.id('default'))))])
+		);
 		body.push(
 			component,
 			b.if(
@@ -436,16 +450,12 @@ export function client_component(source, analysis, options) {
 				b.block([
 					b.const(b.id('s'), b.call('$.source', b.id(analysis.name))),
 					b.stmt(b.assignment('=', b.id(analysis.name), b.call('$.hmr', b.id('s')))),
-					b.stmt(
-						b.call(
-							'import.meta.hot.accept',
-							b.arrow(
-								[b.id('module')],
-								b.block([
-									b.stmt(b.call('$.set', b.id('s'), b.member(b.id('module'), b.id('default'))))
-								])
-							)
-						)
+					b.if(
+						b.id('import.meta.hot.acceptExports'),
+						b.stmt(
+							b.call('import.meta.hot.acceptExports', b.array([b.literal('default')]), accept_fn)
+						),
+						b.stmt(b.call('import.meta.hot.accept', accept_fn))
 					)
 				])
 			),
@@ -466,7 +476,7 @@ export function client_component(source, analysis, options) {
 			}
 
 			// add `App.filename = 'App.svelte'` so that we can print useful messages later
-			body.push(
+			body.unshift(
 				b.stmt(
 					b.assignment('=', b.member(b.id(analysis.name), b.id('filename')), b.literal(filename))
 				)
