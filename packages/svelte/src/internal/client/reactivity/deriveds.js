@@ -85,7 +85,7 @@ function destroy_derived_children(signal) {
 /**
  * @param {import('#client').Derived} derived
  * @param {boolean} force_schedule
- * @returns {void}
+ * @returns {boolean}
  */
 export function update_derived(derived, force_schedule) {
 	var previous_updating_derived = updating_derived;
@@ -101,7 +101,9 @@ export function update_derived(derived, force_schedule) {
 
 	set_signal_status(derived, status);
 
-	if (!derived.equals(value)) {
+	var is_equal = derived.equals(value);
+
+	if (!is_equal) {
 		derived.v = value;
 		mark_reactions(derived, DIRTY, force_schedule);
 
@@ -109,6 +111,8 @@ export function update_derived(derived, force_schedule) {
 			for (var fn of /** @type {import('#client').DerivedDebug} */ (derived).inspect) fn();
 		}
 	}
+
+	return is_equal;
 }
 
 /**
@@ -117,6 +121,7 @@ export function update_derived(derived, force_schedule) {
  */
 export function destroy_derived(signal) {
 	destroy_derived_children(signal);
+	destroy_effect_children(signal);
 	remove_reactions(signal, 0);
 	set_signal_status(signal, DESTROYED);
 
