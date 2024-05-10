@@ -232,7 +232,7 @@ function setup_select_synchronization(value_binding, context) {
 	context.state.init.push(
 		b.stmt(
 			b.call(
-				'$.render_effect',
+				'$.template_effect',
 				b.thunk(
 					b.block([
 						b.stmt(
@@ -448,7 +448,7 @@ function serialize_dynamic_element_attributes(attributes, context, element_id) {
  * Resulting code for dynamic looks something like this:
  * ```js
  * let value;
- * $.render_effect(() => {
+ * $.template_effect(() => {
  * 	if (value !== (value = 'new value')) {
  * 		element.property = value;
  * 		// or
@@ -1184,7 +1184,7 @@ function serialize_update(statement) {
 	const body =
 		statement.type === 'ExpressionStatement' ? statement.expression : b.block([statement]);
 
-	return b.stmt(b.call('$.render_effect', b.thunk(body)));
+	return b.stmt(b.call('$.template_effect', b.thunk(body)));
 }
 
 /**
@@ -1194,7 +1194,7 @@ function serialize_update(statement) {
 function serialize_render_stmt(state) {
 	return state.update.length === 1
 		? serialize_update(state.update[0])
-		: b.stmt(b.call('$.render_effect', b.thunk(b.block(state.update))));
+		: b.stmt(b.call('$.template_effect', b.thunk(b.block(state.update))));
 }
 
 /**
@@ -1739,7 +1739,7 @@ export const template_visitors = {
 		state.init.push(
 			b.stmt(
 				b.call(
-					'$.render_effect',
+					'$.template_effect',
 					b.thunk(
 						b.block([
 							b.stmt(
@@ -1889,11 +1889,23 @@ export const template_visitors = {
 		let is_content_editable = false;
 		let has_content_editable_binding = false;
 
-		if (is_custom_element) {
+		if (
 			// cloneNode is faster, but it does not instantiate the underlying class of the
 			// custom element until the template is connected to the dom, which would
 			// cause problems when setting properties on the custom element.
 			// Therefore we need to use importNode instead, which doesn't have this caveat.
+			is_custom_element ||
+			// If we have an <img loading="lazy"> occurance, we need to use importNode for FF
+			// otherwise, the image won't be lazy. If we detect an attribute for "loading" then
+			// just fallback to using importNode. Also if we have a spread attribute on the img,
+			// then it might contain this property, so we also need to fallback there too.
+			(node.name === 'img' &&
+				node.attributes.some(
+					(attribute) =>
+						attribute.type === 'SpreadAttribute' ||
+						(attribute.type === 'Attribute' && attribute.name === 'loading')
+				))
+		) {
 			metadata.context.template_needs_import_node = true;
 		}
 
