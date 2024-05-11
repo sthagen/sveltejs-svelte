@@ -515,6 +515,7 @@ function infinite_loop_guard() {
  * @returns {void}
  */
 function flush_queued_root_effects(root_effects) {
+	infinite_loop_guard();
 	for (var i = 0; i < root_effects.length; i++) {
 		var signal = root_effects[i];
 		flush_nested_effects(signal, RENDER_EFFECT | EFFECT);
@@ -529,7 +530,6 @@ function flush_queued_effects(effects) {
 	var length = effects.length;
 	if (length === 0) return;
 
-	infinite_loop_guard();
 	for (var i = 0; i < length; i++) {
 		var effect = effects[i];
 
@@ -653,12 +653,13 @@ function process_effects(effect, filter_flags, shallow, collected_effects) {
 	}
 
 	if (effects.length > 0) {
-		if ((filter_flags & EFFECT) !== 0) {
-			collected_effects.push(...effects);
-		}
-
-		if (!shallow) {
-			for (var i = 0; i < effects.length; i++) {
+		// We might be dealing with many effects here, far more than can be spread into
+		// an array push call (callstack overflow). So let's deal with each effect in a loop.
+		for (var i = 0; i < effects.length; i++) {
+			if ((filter_flags & EFFECT) !== 0) {
+				collected_effects.push(effects[i]);
+			}
+			if (!shallow) {
 				process_effects(effects[i], filter_flags, false, collected_effects);
 			}
 		}
@@ -701,6 +702,7 @@ function flush_nested_effects(effect, filter_flags, shallow = false) {
  * @returns {void}
  */
 export function flush_local_render_effects(effect) {
+	infinite_loop_guard();
 	// We are entering a new flush sequence, so ensure counter is reset.
 	flush_count = 0;
 	flush_nested_effects(effect, RENDER_EFFECT, true);
@@ -1161,7 +1163,7 @@ export function pop(component) {
 		const effects = context_stack_item.e;
 		if (effects !== null) {
 			context_stack_item.e = null;
-			for (let i = 0; i < effects.length; i++) {
+			for (var i = 0; i < effects.length; i++) {
 				effect(effects[i]);
 			}
 		}
