@@ -624,11 +624,23 @@ const validation = {
 
 		context.next({ ...context.state, parent_element: null });
 
-		if (node.expression.name !== 'children') return;
-
 		const { path } = context;
 		const parent = path.at(-2);
 		if (!parent) return;
+
+		if (
+			parent.type === 'Component' &&
+			parent.attributes.some(
+				(attribute) =>
+					(attribute.type === 'Attribute' || attribute.type === 'BindDirective') &&
+					attribute.name === node.expression.name
+			)
+		) {
+			e.snippet_shadowing_prop(node, node.expression.name);
+		}
+
+		if (node.expression.name !== 'children') return;
+
 		if (
 			parent.type === 'Component' ||
 			parent.type === 'SvelteComponent' ||
@@ -893,6 +905,11 @@ function ensure_no_module_import_conflict(node, state) {
  * @type {import('zimmerframe').Visitors<import('#compiler').SvelteNode, import('./types.js').AnalysisState>}
  */
 export const validation_runes_js = {
+	ImportDeclaration(node) {
+		if (typeof node.source.value === 'string' && node.source.value.startsWith('svelte/internal')) {
+			e.import_svelte_internal_forbidden(node);
+		}
+	},
 	ExportSpecifier(node, { state }) {
 		validate_export(node, state.scope, node.local.name);
 	},
@@ -1065,6 +1082,11 @@ function validate_assignment(node, argument, state) {
 }
 
 export const validation_runes = merge(validation, a11y_validators, {
+	ImportDeclaration(node) {
+		if (typeof node.source.value === 'string' && node.source.value.startsWith('svelte/internal')) {
+			e.import_svelte_internal_forbidden(node);
+		}
+	},
 	Identifier(node, { path, state }) {
 		let i = path.length;
 		let parent = /** @type {import('estree').Expression} */ (path[--i]);
