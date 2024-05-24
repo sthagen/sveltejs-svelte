@@ -1,15 +1,13 @@
-import { hydrate_nodes, hydrating } from './hydration.js';
+import { hydrate_nodes, hydrate_start, hydrating } from './hydration.js';
 import { empty } from './operations.js';
 import { create_fragment_from_html } from './reconciler.js';
 import { current_effect } from '../runtime.js';
 import { TEMPLATE_FRAGMENT, TEMPLATE_USE_IMPORT_NODE } from '../../../constants.js';
 import { effect } from '../reactivity/effects.js';
-import { is_array } from '../utils.js';
 
 /**
  * @template {import("#client").TemplateNode | import("#client").TemplateNode[]} T
  * @param {T} dom
- * @returns {T}
  */
 function push_template_node(dom) {
 	var effect = /** @type {import('#client').Effect} */ (current_effect);
@@ -17,8 +15,6 @@ function push_template_node(dom) {
 	if (effect.dom === null) {
 		effect.dom = dom;
 	}
-
-	return dom;
 }
 
 /**
@@ -36,7 +32,8 @@ export function template(content, flags) {
 
 	return () => {
 		if (hydrating) {
-			return push_template_node(is_fragment ? hydrate_nodes : hydrate_nodes[0]);
+			push_template_node(is_fragment ? hydrate_nodes : hydrate_start);
+			return hydrate_start;
 		}
 
 		if (!node) {
@@ -88,7 +85,8 @@ export function ns_template(content, flags, ns = 'svg') {
 
 	return () => {
 		if (hydrating) {
-			return push_template_node(is_fragment ? hydrate_nodes : hydrate_nodes[0]);
+			push_template_node(is_fragment ? hydrate_nodes : hydrate_start);
+			return hydrate_start;
 		}
 
 		if (!node) {
@@ -181,7 +179,7 @@ function run_scripts(node) {
 export function text(anchor) {
 	if (!hydrating) return empty();
 
-	var node = hydrate_nodes[0];
+	var node = hydrate_start;
 
 	if (!node) {
 		// if an {expression} is empty during SSR, `hydrate_nodes` will be empty.
@@ -189,14 +187,17 @@ export function text(anchor) {
 		anchor.before((node = empty()));
 	}
 
-	return push_template_node(node);
+	push_template_node(node);
+	return node;
 }
 
 export function comment() {
 	// we're not delegating to `template` here for performance reasons
 	if (hydrating) {
-		return push_template_node(hydrate_nodes);
+		push_template_node(hydrate_nodes);
+		return hydrate_start;
 	}
+
 	var frag = document.createDocumentFragment();
 	var anchor = empty();
 	frag.append(anchor);
@@ -208,18 +209,17 @@ export function comment() {
  * Assign the created (or in hydration mode, traversed) dom elements to the current block
  * and insert the elements into the dom (in client mode).
  * @param {Text | Comment | Element} anchor
- * @param {DocumentFragment | Element | Comment} node
+ * @param {DocumentFragment | Element} dom
  */
-export function append(anchor, node) {
-	if (!hydrating) {
-		/** @type {import('#client').Dom} */
-		const dom =
-			node.nodeType === 11
-				? /** @type {import('#client').TemplateNode[]} */ ([...node.childNodes])
-				: /** @type {Element | Comment} */ (node);
+export function append(anchor, dom) {
+	if (hydrating) return;
 
-		/** @type {import('#client').Effect} */ (current_effect).dom = dom;
+	var effect = /** @type {import('#client').Effect} */ (current_effect);
 
-		anchor.before(/** @type {Node} */ (node));
-	}
+	effect.dom =
+		dom.nodeType === 11
+			? /** @type {import('#client').TemplateNode[]} */ ([...dom.childNodes])
+			: /** @type {Element | Comment} */ (dom);
+
+	anchor.before(/** @type {Node} */ (dom));
 }
