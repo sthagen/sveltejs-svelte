@@ -1,5 +1,31 @@
 # svelte
 
+## 5.0.0-next.145
+
+### Patch Changes
+
+- fix: `$state.is` missing second argument on the server ([#11835](https://github.com/sveltejs/svelte/pull/11835))
+
+- fix: prevent buggy ownership warning when reassigning state ([#11812](https://github.com/sveltejs/svelte/pull/11812))
+
+- fix: address regressed memory leak ([#11832](https://github.com/sveltejs/svelte/pull/11832))
+
+## 5.0.0-next.144
+
+### Patch Changes
+
+- fix: address derived memory leak on disconnection from reactive graph ([#11819](https://github.com/sveltejs/svelte/pull/11819))
+
+- fix: set correct scope for `@const` tags within slots ([#11798](https://github.com/sveltejs/svelte/pull/11798))
+
+- fix: better support for onwheel events in chrome ([#11808](https://github.com/sveltejs/svelte/pull/11808))
+
+- fix: coherent infinite loop guard ([#11815](https://github.com/sveltejs/svelte/pull/11815))
+
+- fix: make prop fallback values deeply reactive if needed ([#11804](https://github.com/sveltejs/svelte/pull/11804))
+
+- fix: robustify initial scroll value detection when scroll is smooth ([#11802](https://github.com/sveltejs/svelte/pull/11802))
+
 ## 5.0.0-next.143
 
 ### Patch Changes
