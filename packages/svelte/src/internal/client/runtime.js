@@ -122,6 +122,9 @@ export function set_last_inspected_signal(signal) {
 /** If `true`, `get`ting the signal should not register it as a dependency */
 export let current_untracking = false;
 
+/** @type {number} */
+let current_version = 0;
+
 // If we are working with a get() chain that has no active container,
 // to prevent memory leaks, we skip adding the reaction.
 export let current_skip_reaction = false;
@@ -153,6 +156,10 @@ export let dev_current_component_function = null;
 /** @param {import('#client').ComponentContext['function']} fn */
 export function set_dev_current_component_function(fn) {
 	dev_current_component_function = fn;
+}
+
+export function increment_version() {
+	return current_version++;
 }
 
 /** @returns {boolean} */
@@ -201,30 +208,28 @@ export function batch_inspect(target, prop, receiver) {
 export function check_dirtiness(reaction) {
 	var flags = reaction.f;
 	var is_dirty = (flags & DIRTY) !== 0;
-	var is_unowned = (flags & UNOWNED) !== 0;
 
-	// If we are unowned, we still need to ensure that we update our version to that
-	// of our dependencies.
-	if (is_dirty && !is_unowned) {
+	if (is_dirty) {
 		return true;
 	}
 
+	var is_unowned = (flags & UNOWNED) !== 0;
 	var is_disconnected = (flags & DISCONNECTED) !== 0;
 
-	if ((flags & MAYBE_DIRTY) !== 0 || (is_dirty && is_unowned)) {
+	if ((flags & MAYBE_DIRTY) !== 0) {
 		var dependencies = reaction.deps;
 
 		if (dependencies !== null) {
 			var length = dependencies.length;
-			var is_equal;
 			var reactions;
 
 			for (var i = 0; i < length; i++) {
 				var dependency = dependencies[i];
 
 				if (!is_dirty && check_dirtiness(/** @type {import('#client').Derived} */ (dependency))) {
-					is_equal = update_derived(/** @type {import('#client').Derived} **/ (dependency), true);
+					update_derived(/** @type {import('#client').Derived} **/ (dependency), true);
 				}
+
 				var version = dependency.version;
 
 				if (is_unowned) {
@@ -232,22 +237,15 @@ export function check_dirtiness(reaction) {
 					// if our dependency write version is higher. If it is then we can assume
 					// that state has changed to a newer version and thus this unowned signal
 					// is also dirty.
-
 					if (version > /** @type {import('#client').Derived} */ (reaction).version) {
-						/** @type {import('#client').Derived} */ (reaction).version = version;
-						return !is_equal;
+						return true;
 					}
 
 					if (!current_skip_reaction && !dependency?.reactions?.includes(reaction)) {
 						// If we are working with an unowned signal as part of an effect (due to !current_skip_reaction)
 						// and the version hasn't changed, we still need to check that this reaction
 						// if linked to the dependency source – otherwise future updates will not be caught.
-						reactions = dependency.reactions;
-						if (reactions === null) {
-							dependency.reactions = [reaction];
-						} else {
-							reactions.push(reaction);
-						}
+						(dependency.reactions ??= []).push(reaction);
 					}
 				} else if ((reaction.f & DIRTY) !== 0) {
 					// `signal` might now be dirty, as a result of calling `check_dirtiness` and/or `update_derived`
@@ -257,9 +255,9 @@ export function check_dirtiness(reaction) {
 					// In thise case, we need to re-attach it to the graph and mark it dirty if any of its dependencies have
 					// changed since.
 					if (version > /** @type {import('#client').Derived} */ (reaction).version) {
-						/** @type {import('#client').Derived} */ (reaction).version = version;
 						is_dirty = true;
 					}
+
 					reactions = dependency.reactions;
 					if (reactions === null) {
 						dependency.reactions = [reaction];
