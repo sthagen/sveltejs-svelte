@@ -29,13 +29,11 @@
     "bench:debug": "node --allow-natives-syntax --inspect-brk ./benchmarking/run.js"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.27.1",
+    "@changesets/cli": "^2.27.6",
     "@sveltejs/eslint-config": "^7.0.1",
     "@svitejs/changesets-changelog-github-compact": "^1.1.0",
     "@types/node": "^20.11.5",
     "@vitest/coverage-v8": "^1.2.1",
-    "concurrently": "^8.2.2",
-    "cross-env": "^7.0.3",
     "eslint": "^9.0.0",
     "eslint-plugin-lube": "^0.4.3",
     "jsdom": "22.0.0",
@@ -49,7 +47,7 @@
   },
   "pnpm": {
     "overrides": {
-      "jimp>xml2js": "^0.6.0"
+      "xml2js": "^0.6.0"
     }
   }
 }
