@@ -256,20 +256,24 @@ declare module 'svelte' {
 	/**
 	 * The type of a `#snippet` block. You can use it to (for example) express that your component expects a snippet of a certain type:
 	 * ```ts
-	 * let { banner }: { banner: Snippet<{ text: string }> } = $props();
+	 * let { banner }: { banner: Snippet<[{ text: string }]> } = $props();
 	 * ```
 	 * You can only call a snippet through the `{@render ...}` tag.
+	 *
+	 * https://svelte-5-preview.vercel.app/docs/snippets
+	 *
+	 * @template Parameters the parameters that the snippet expects (if any) as a tuple.
 	 */
-	type Snippet<T extends unknown[] = []> =
+	type Snippet<Parameters extends unknown[] = []> =
 		// this conditional allows tuples but not arrays. Arrays would indicate a
 		// rest parameter type, which is not supported. If rest parameters are added
 		// in the future, the condition can be removed.
-		number extends T['length']
+		number extends Parameters['length']
 			? never
 			: {
 					(
 						this: void,
-						...args: T
+						...args: Parameters
 					): typeof SnippetReturn & {
 						_: 'functions passed to {@render ...} tags must use the `Snippet` type imported from "svelte"';
 					};
@@ -1568,6 +1572,9 @@ declare module 'svelte/compiler' {
 	interface RenderTag extends BaseNode {
 		type: 'RenderTag';
 		expression: SimpleCallExpression | (ChainExpression & { expression: SimpleCallExpression });
+		metadata: {
+			dynamic: boolean;
+		};
 	}
 
 	type Tag = ExpressionTag | HtmlTag | ConstTag | DebugTag | RenderTag;
@@ -1687,6 +1694,9 @@ declare module 'svelte/compiler' {
 
 	interface Component extends BaseElement {
 		type: 'Component';
+		metadata: {
+			dynamic: boolean;
+		};
 	}
 
 	interface TitleElement extends BaseElement {
@@ -3009,7 +3019,7 @@ declare function $props(): any;
  *
  * https://svelte-5-preview.vercel.app/docs/runes#$bindable
  */
-declare function $bindable<T>(t?: T): T;
+declare function $bindable<T>(fallback?: T): T;
 
 /**
  * Inspects one or more values whenever they, or the properties they contain, change. Example:
