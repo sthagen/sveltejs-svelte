@@ -6,7 +6,7 @@ import {
 	set_signal_status,
 	mark_reactions,
 	current_skip_reaction,
-	execute_reaction_fn,
+	update_reaction,
 	destroy_effect_children,
 	increment_version
 } from '../runtime.js';
@@ -63,15 +63,16 @@ export function derived_safe_equal(fn) {
 }
 
 /**
- * @param {import('#client').Derived} signal
+ * @param {import('#client').Derived} derived
  * @returns {void}
  */
-function destroy_derived_children(signal) {
-	destroy_effect_children(signal);
-	var deriveds = signal.deriveds;
+function destroy_derived_children(derived) {
+	destroy_effect_children(derived);
+	var deriveds = derived.deriveds;
 
 	if (deriveds !== null) {
-		signal.deriveds = null;
+		derived.deriveds = null;
+
 		for (var i = 0; i < deriveds.length; i += 1) {
 			destroy_derived(deriveds[i]);
 		}
@@ -86,7 +87,7 @@ export function update_derived(derived) {
 	var previous_updating_derived = updating_derived;
 	updating_derived = true;
 	destroy_derived_children(derived);
-	var value = execute_reaction_fn(derived);
+	var value = update_reaction(derived);
 	updating_derived = previous_updating_derived;
 
 	var status =

@@ -1,5 +1,25 @@
 # svelte
 
+## 5.0.0-next.172
+
+### Patch Changes
+
+- fix: handle duplicate signal dependencies gracefully ([#12261](https://github.com/sveltejs/svelte/pull/12261))
+
+## 5.0.0-next.171
+
+### Patch Changes
+
+- feat: simpler effect DOM boundaries ([#12258](https://github.com/sveltejs/svelte/pull/12258))
+
+## 5.0.0-next.170
+
+### Patch Changes
+
+- fix: bump dts-buddy for better type generation ([#12262](https://github.com/sveltejs/svelte/pull/12262))
+
+- breaking: expose `CompileError` interface, not class ([#12255](https://github.com/sveltejs/svelte/pull/12255))
+
 ## 5.0.0-next.169
 
 ### Patch Changes
