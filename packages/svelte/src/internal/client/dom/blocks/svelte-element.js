@@ -14,6 +14,7 @@ import { current_component_context, current_effect } from '../../runtime.js';
 import { DEV } from 'esm-env';
 import { assign_nodes } from '../template.js';
 import { noop } from '../../../shared/utils.js';
+import { EFFECT_TRANSPARENT } from '../../constants.js';
 
 /**
  * @param {Comment | Element} node
@@ -69,7 +70,6 @@ export function element(node, get_tag, is_svg, render_fn, get_namespace, locatio
 				pause_effect(effect, () => {
 					effect = null;
 					current_tag = null;
-					element?.remove();
 				});
 			} else if (next_tag === current_tag) {
 				// same tag as is currently rendered — abort outro
@@ -83,7 +83,6 @@ export function element(node, get_tag, is_svg, render_fn, get_namespace, locatio
 
 		if (next_tag && next_tag !== current_tag) {
 			effect = branch(() => {
-				const prev_element = element;
 				element = hydrating
 					? /** @type {Element} */ (element)
 					: ns
@@ -101,10 +100,6 @@ export function element(node, get_tag, is_svg, render_fn, get_namespace, locatio
 							column: location[1]
 						}
 					};
-				}
-
-				if (prev_element && !hydrating) {
-					prev_element.remove();
 				}
 
 				if (render_fn) {
@@ -141,5 +136,5 @@ export function element(node, get_tag, is_svg, render_fn, get_namespace, locatio
 		// Inert effects are proactively detached from the effect tree. Returning a noop
 		// teardown function is an easy way to ensure that this is not discarded
 		return noop;
-	});
+	}, EFFECT_TRANSPARENT);
 }
