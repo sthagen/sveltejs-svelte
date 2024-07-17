@@ -366,6 +366,13 @@ declare module 'svelte' {
 	/** Anything except a function */
 	type NotFunction<T> = T extends Function ? never : T;
 	/**
+	 * Create a snippet programmatically
+	 * */
+	export function createRawSnippet<Params extends unknown[]>(fn: (...params: Getters<Params>) => {
+		render: () => string;
+		setup?: (element: Element) => void;
+	}): Snippet<Params>;
+	/**
 	 * Mounts a component to the given target and returns the exports and potentially the props (if compiled with `accessors: true`) of the component.
 	 * Transitions will play during the initial render unless the `intro` option is set to `false`.
 	 *
@@ -450,6 +457,9 @@ declare module 'svelte' {
 	 * https://svelte.dev/docs/svelte#getallcontexts
 	 * */
 	export function getAllContexts<T extends Map<any, any> = Map<any, any>>(): T;
+	type Getters<T> = {
+		[K in keyof T]: () => T[K];
+	};
 
 	export {};
 }
@@ -1143,6 +1153,16 @@ declare module 'svelte/compiler' {
 		outro: boolean;
 	}
 
+	/** A `style:` directive */
+	interface LegacyStyleDirective extends BaseNode_1 {
+		type: 'StyleDirective';
+		/** The 'x' in `style:x` */
+		name: string;
+		/** The 'y' in `style:x={y}` */
+		value: true | Array<ExpressionTag | Text>;
+		modifiers: Array<'important'>;
+	}
+
 	interface LegacyWindow extends BaseElement_1 {
 		type: 'Window';
 	}
@@ -1161,7 +1181,7 @@ declare module 'svelte/compiler' {
 		| LegacyClass
 		| LegacyLet
 		| LegacyEventHandler
-		| StyleDirective
+		| LegacyStyleDirective
 		| LegacyTransition
 		| LegacyAction;
 
@@ -1624,7 +1644,7 @@ declare module 'svelte/compiler' {
 		/** The 'x' in `style:x` */
 		name: string;
 		/** The 'y' in `style:x={y}` */
-		value: true | Array<ExpressionTag | Text>;
+		value: true | ExpressionTag | Array<ExpressionTag | Text>;
 		modifiers: Array<'important'>;
 		metadata: {
 			dynamic: boolean;
@@ -1845,7 +1865,7 @@ declare module 'svelte/compiler' {
 	interface Attribute extends BaseNode {
 		type: 'Attribute';
 		name: string;
-		value: true | Array<Text | ExpressionTag>;
+		value: true | ExpressionTag | Array<Text | ExpressionTag>;
 		metadata: {
 			dynamic: boolean;
 			/** May be set if this is an event attribute */

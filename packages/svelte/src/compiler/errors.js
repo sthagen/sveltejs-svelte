@@ -471,6 +471,15 @@ export function css_global_block_invalid_modifier(node) {
 }
 
 /**
+ * A :global {...} block can only appear at the end of a selector sequence (did you mean to use :global(...) instead?)
+ * @param {null | number | NodeLike} node
+ * @returns {never}
+ */
+export function css_global_block_invalid_placement(node) {
+	e(node, "css_global_block_invalid_placement", "A :global {...} block can only appear at the end of a selector sequence (did you mean to use :global(...) instead?)");
+}
+
+/**
  * :global(...) can be at the start or end of a selector sequence, but not in the middle
  * @param {null | number | NodeLike} node
  * @returns {never}
@@ -1108,12 +1117,12 @@ export function snippet_conflict(node) {
 }
 
 /**
- * snippets do not support rest parameters; use an array instead
+ * Snippets do not support rest parameters; use an array instead
  * @param {null | number | NodeLike} node
  * @returns {never}
  */
 export function snippet_invalid_rest_parameter(node) {
-	e(node, "snippet_invalid_rest_parameter", "snippets do not support rest parameters; use an array instead");
+	e(node, "snippet_invalid_rest_parameter", "Snippets do not support rest parameters; use an array instead");
 }
 
 /**
