@@ -780,7 +780,11 @@ function serialize_inline_component(node, component_name, context, anchor = cont
 		} else if (attribute.type === 'BindDirective') {
 			const expression = /** @type {Expression} */ (context.visit(attribute.expression));
 
-			if (expression.type === 'MemberExpression' && context.state.options.dev) {
+			if (
+				expression.type === 'MemberExpression' &&
+				context.state.options.dev &&
+				context.state.analysis.runes
+			) {
 				context.state.init.push(serialize_validate_binding(context.state, attribute, expression));
 			}
 
@@ -1165,7 +1169,11 @@ function serialize_event_handler(node, { state, visit }) {
 			} else {
 				handler = /** @type {Expression} */ (visit(handler));
 			}
-		} else if (handler.type === 'ConditionalExpression' || handler.type === 'LogicalExpression') {
+		} else if (
+			handler.type === 'CallExpression' ||
+			handler.type === 'ConditionalExpression' ||
+			handler.type === 'LogicalExpression'
+		) {
 			handler = dynamic_handler();
 		} else {
 			handler = /** @type {Expression} */ (visit(handler));
@@ -2826,7 +2834,11 @@ export const template_visitors = {
 		const { state, path, visit } = context;
 		const expression = node.expression;
 
-		if (expression.type === 'MemberExpression' && context.state.options.dev) {
+		if (
+			expression.type === 'MemberExpression' &&
+			context.state.options.dev &&
+			context.state.analysis.runes
+		) {
 			context.state.init.push(
 				serialize_validate_binding(
 					context.state,
