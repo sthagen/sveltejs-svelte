@@ -1,6 +1,5 @@
 /** @import { BlockStatement, CallExpression, Expression, ExpressionStatement, Identifier, Literal, MemberExpression, ObjectExpression, Pattern, Property, Statement, Super, TemplateElement, TemplateLiteral } from 'estree' */
 /** @import { BindDirective } from '#compiler' */
-/** @import { ComponentClientTransformState } from '../types' */
 import {
 	extract_identifiers,
 	extract_paths,
@@ -715,7 +714,7 @@ function serialize_inline_component(node, component_name, context, anchor = cont
 			lets.push(/** @type {ExpressionStatement} */ (context.visit(attribute)));
 		} else if (attribute.type === 'OnDirective') {
 			events[attribute.name] ||= [];
-			let handler = serialize_event_handler(attribute, context);
+			let handler = serialize_event_handler(attribute, null, context);
 			if (attribute.modifiers.includes('once')) {
 				handler = b.call('$.once', handler);
 			}
@@ -933,13 +932,7 @@ function serialize_inline_component(node, component_name, context, anchor = cont
 
 	/** @param {Expression} node_id */
 	let fn = (node_id) => {
-		return b.call(
-			context.state.options.dev
-				? b.call('$.validate_component', b.id(component_name))
-				: component_name,
-			node_id,
-			props_expression
-		);
+		return b.call(component_name, node_id, props_expression);
 	};
 
 	if (bind_this !== null) {
@@ -1129,9 +1122,10 @@ function serialize_render_stmt(update) {
 /**
  * Serializes the event handler function of the `on:` directive
  * @param {Pick<import('#compiler').OnDirective, 'name' | 'modifiers' | 'expression'>} node
+ * @param {null | { contains_call_expression: boolean; dynamic: boolean; } | null} metadata
  * @param {import('../types.js').ComponentContext} context
  */
-function serialize_event_handler(node, { state, visit }) {
+function serialize_event_handler(node, metadata, { state, visit }) {
 	/** @type {Expression} */
 	let handler;
 
@@ -1144,14 +1138,44 @@ function serialize_event_handler(node, { state, visit }) {
 				null,
 				[b.rest(b.id('$$args'))],
 				b.block([
-					b.const('$$callback', /** @type {Expression} */ (visit(handler))),
 					b.return(
-						b.call(b.member(b.id('$$callback'), b.id('apply'), false, true), b.this, b.id('$$args'))
+						b.call(
+							b.member(/** @type {Expression} */ (visit(handler)), b.id('apply'), false, true),
+							b.this,
+							b.id('$$args')
+						)
 					)
 				])
 			);
 
-		if (handler.type === 'Identifier' || handler.type === 'MemberExpression') {
+		if (
+			metadata?.contains_call_expression &&
+			!(
+				(handler.type === 'ArrowFunctionExpression' || handler.type === 'FunctionExpression') &&
+				handler.metadata.hoistable
+			)
+		) {
+			// Create a derived dynamic event handler
+			const id = b.id(state.scope.generate('event_handler'));
+
+			state.init.push(
+				b.var(id, b.call('$.derived', b.thunk(/** @type {Expression} */ (visit(handler)))))
+			);
+
+			handler = b.function(
+				null,
+				[b.rest(b.id('$$args'))],
+				b.block([
+					b.return(
+						b.call(
+							b.member(b.call('$.get', id), b.id('apply'), false, true),
+							b.this,
+							b.id('$$args')
+						)
+					)
+				])
+			);
+		} else if (handler.type === 'Identifier' || handler.type === 'MemberExpression') {
 			const id = object(handler);
 			const binding = id === null ? null : state.scope.get(id.name);
 			if (
@@ -1169,11 +1193,7 @@ function serialize_event_handler(node, { state, visit }) {
 			} else {
 				handler = /** @type {Expression} */ (visit(handler));
 			}
-		} else if (
-			handler.type === 'CallExpression' ||
-			handler.type === 'ConditionalExpression' ||
-			handler.type === 'LogicalExpression'
-		) {
+		} else if (handler.type === 'ConditionalExpression' || handler.type === 'LogicalExpression') {
 			handler = dynamic_handler();
 		} else {
 			handler = /** @type {Expression} */ (visit(handler));
@@ -1210,17 +1230,18 @@ function serialize_event_handler(node, { state, visit }) {
 
 /**
  * Serializes an event handler function of the `on:` directive or an attribute starting with `on`
- * @param {{name: string; modifiers: string[]; expression: Expression | null; delegated?: import('#compiler').DelegatedEvent | null; }} node
+ * @param {{name: string;modifiers: string[];expression: Expression | null;delegated?: import('#compiler').DelegatedEvent | null;}} node
+ * @param {null | { contains_call_expression: boolean; dynamic: boolean; }} metadata
  * @param {import('../types.js').ComponentContext} context
  */
-function serialize_event(node, context) {
+function serialize_event(node, metadata, context) {
 	const state = context.state;
 
 	/** @type {Statement} */
 	let statement;
 
 	if (node.expression) {
-		let handler = serialize_event_handler(node, context);
+		let handler = serialize_event_handler(node, metadata, context);
 		const event_name = node.name;
 		const delegated = node.delegated;
 
@@ -1289,7 +1310,12 @@ function serialize_event(node, context) {
 		statement = b.stmt(b.call('$.event', ...args));
 	} else {
 		statement = b.stmt(
-			b.call('$.event', b.literal(node.name), state.node, serialize_event_handler(node, context))
+			b.call(
+				'$.event',
+				b.literal(node.name),
+				state.node,
+				serialize_event_handler(node, metadata, context)
+			)
 		);
 	}
 
@@ -1327,6 +1353,7 @@ function serialize_event_attribute(node, context) {
 			modifiers,
 			delegated: node.metadata.delegated
 		},
+		!Array.isArray(node.value) && node.value?.type === 'ExpressionTag' ? node.value.metadata : null,
 		context
 	);
 }
@@ -1876,9 +1903,6 @@ export const template_visitors = {
 		}
 
 		let snippet_function = /** @type {Expression} */ (context.visit(callee));
-		if (context.state.options.dev) {
-			snippet_function = b.call('$.validate_snippet', snippet_function);
-		}
 
 		if (node.metadata.dynamic) {
 			context.state.init.push(
@@ -2804,7 +2828,7 @@ export const template_visitors = {
 		context.next({ ...context.state, in_constructor: false });
 	},
 	OnDirective(node, context) {
-		serialize_event(node, context);
+		serialize_event(node, null, context);
 	},
 	UseDirective(node, { state, next, visit }) {
 		const params = [b.id('$$node')];
