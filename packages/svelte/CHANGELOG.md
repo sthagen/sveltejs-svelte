@@ -1,5 +1,19 @@
 # svelte
 
+## 5.0.0-next.198
+
+### Patch Changes
+
+- chore: remove internal `binding.expression` mechanism ([#12530](https://github.com/sveltejs/svelte/pull/12530))
+
+- fix: exclude `bind:this` from reactive state validation ([#12566](https://github.com/sveltejs/svelte/pull/12566))
+
+## 5.0.0-next.197
+
+### Patch Changes
+
+- fix: correctly set anchor inside HMR block ([#12575](https://github.com/sveltejs/svelte/pull/12575))
+
 ## 5.0.0-next.196
 
 ### Patch Changes
