@@ -373,8 +373,6 @@ declare module 'svelte' {
 	 * Synchronously flushes any pending state changes and those that result from it.
 	 * */
 	export function flushSync(fn?: (() => void) | undefined): void;
-	/** Anything except a function */
-	type NotFunction<T> = T extends Function ? never : T;
 	/**
 	 * Create a snippet programmatically
 	 * */
@@ -382,6 +380,8 @@ declare module 'svelte' {
 		render: () => string;
 		setup?: (element: Element) => void;
 	}): Snippet<Params>;
+	/** Anything except a function */
+	type NotFunction<T> = T extends Function ? never : T;
 	/**
 	 * Mounts a component to the given target and returns the exports and potentially the props (if compiled with `accessors: true`) of the component.
 	 * Transitions will play during the initial render unless the `intro` option is set to `false`.
@@ -582,7 +582,7 @@ declare module 'svelte/animate' {
 }
 
 declare module 'svelte/compiler' {
-	import type { AssignmentExpression, ClassDeclaration, Expression, FunctionDeclaration, Identifier, ImportDeclaration, ArrayExpression, MemberExpression, ObjectExpression, Pattern, ArrowFunctionExpression, VariableDeclaration, VariableDeclarator, FunctionExpression, Node, Program, ChainExpression, SimpleCallExpression } from 'estree';
+	import type { AssignmentExpression, ClassDeclaration, Expression, FunctionDeclaration, Identifier, ImportDeclaration, ArrayExpression, MemberExpression, ObjectExpression, Pattern, Node, VariableDeclarator, ArrowFunctionExpression, VariableDeclaration, FunctionExpression, Program, ChainExpression, SimpleCallExpression } from 'estree';
 	import type { SourceMap } from 'magic-string';
 	import type { Context } from 'zimmerframe';
 	import type { Location } from 'locate-character';
@@ -1254,13 +1254,13 @@ declare module 'svelte/compiler' {
 		/**
 		 * A map of declarators to the bindings they declare
 		 * */
-		declarators: Map<import("estree").VariableDeclarator | LetDirective, Binding[]>;
+		declarators: Map<VariableDeclarator | LetDirective, Binding[]>;
 		/**
 		 * A set of all the names referenced with this scope
 		 * — useful for generating unique names
 		 * */
 		references: Map<string, {
-			node: import("estree").Identifier;
+			node: Identifier;
 			path: SvelteNode[];
 		}[]>;
 		/**
@@ -1269,25 +1269,25 @@ declare module 'svelte/compiler' {
 		 */
 		function_depth: number;
 		
-		declare(node: import("estree").Identifier, kind: Binding["kind"], declaration_kind: DeclarationKind, initial?: null | import("estree").Expression | import("estree").FunctionDeclaration | import("estree").ClassDeclaration | import("estree").ImportDeclaration | EachBlock): Binding;
+		declare(node: Identifier, kind: Binding["kind"], declaration_kind: DeclarationKind, initial?: null | Expression | FunctionDeclaration | ClassDeclaration | ImportDeclaration | EachBlock): Binding;
 		child(porous?: boolean): Scope;
 		
 		generate(preferred_name: string): string;
 		
 		get(name: string): Binding | null;
 		
-		get_bindings(node: import("estree").VariableDeclarator | LetDirective): Binding[];
+		get_bindings(node: VariableDeclarator | LetDirective): Binding[];
 		
 		owner(name: string): Scope | null;
 		
-		reference(node: import("estree").Identifier, path: SvelteNode[]): void;
+		reference(node: Identifier, path: SvelteNode[]): void;
 		#private;
 	}
 	class ScopeRoot {
 		
 		conflicts: Set<string>;
 		
-		unique(preferred_name: string): import("estree").Identifier;
+		unique(preferred_name: string): Identifier;
 	}
 	namespace Css {
 		export interface BaseNode {
@@ -1636,6 +1636,10 @@ declare module 'svelte/compiler' {
 		/** The 'y' in `on:x={y}` */
 		expression: null | Expression;
 		modifiers: string[]; // TODO specify
+		metadata: {
+			contains_call_expression: boolean;
+			dynamic: boolean;
+		};
 	}
 
 	type DelegatedEvent =
