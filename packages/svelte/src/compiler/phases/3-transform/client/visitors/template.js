@@ -3,35 +3,8 @@
 /** @import { SourceLocation } from '#shared' */
 /** @import { Scope } from '../../../scope.js' */
 /** @import { ComponentClientTransformState, ComponentContext, ComponentVisitors } from '../types.js' */
-import {
-	extract_identifiers,
-	extract_paths,
-	get_attribute_chunks,
-	get_attribute_expression,
-	is_event_attribute,
-	is_text_attribute,
-	object,
-	unwrap_optional
-} from '../../../../utils/ast.js';
-import { binding_properties } from '../../../bindings.js';
-import { clean_nodes, determine_namespace_for_children, infer_namespace } from '../../utils.js';
-import {
-	DOMProperties,
-	LoadErrorElements,
-	PassiveEvents,
-	VoidElements
-} from '../../../constants.js';
-import { is_custom_element_node, is_element_node } from '../../../nodes.js';
-import * as b from '../../../../utils/builders.js';
-import {
-	with_loc,
-	function_visitor,
-	get_assignment_value,
-	serialize_get_binding,
-	serialize_set_binding,
-	create_derived,
-	create_derived_block_argument
-} from '../utils.js';
+import is_reference from 'is-reference';
+import { walk } from 'zimmerframe';
 import {
 	AttributeAliases,
 	DOMBooleanAttributes,
@@ -49,12 +22,39 @@ import {
 	TRANSITION_OUT
 } from '../../../../../constants.js';
 import { escape_html } from '../../../../../escaping.js';
-import { regex_is_valid_identifier } from '../../../patterns.js';
-import { javascript_visitors_runes } from './javascript-runes.js';
+import { dev, is_ignored, locator } from '../../../../state.js';
+import {
+	extract_identifiers,
+	extract_paths,
+	get_attribute_chunks,
+	get_attribute_expression,
+	is_event_attribute,
+	is_text_attribute,
+	object,
+	unwrap_optional
+} from '../../../../utils/ast.js';
+import * as b from '../../../../utils/builders.js';
 import { sanitize_template_string } from '../../../../utils/sanitize_template_string.js';
-import { walk } from 'zimmerframe';
-import { locator } from '../../../../state.js';
-import is_reference from 'is-reference';
+import { binding_properties } from '../../../bindings.js';
+import {
+	DOMProperties,
+	LoadErrorElements,
+	PassiveEvents,
+	VoidElements
+} from '../../../constants.js';
+import { is_custom_element_node, is_element_node } from '../../../nodes.js';
+import { regex_is_valid_identifier } from '../../../patterns.js';
+import { clean_nodes, determine_namespace_for_children, infer_namespace } from '../../utils.js';
+import {
+	create_derived,
+	create_derived_block_argument,
+	function_visitor,
+	get_assignment_value,
+	serialize_get_binding,
+	serialize_set_binding,
+	with_loc
+} from '../utils.js';
+import { javascript_visitors_runes } from './javascript-runes.js';
 
 /**
  * @param {RegularElement | SvelteElement} element
@@ -83,8 +83,15 @@ function get_attribute_name(element, attribute, context) {
  * @param {Identifier} element_id
  * @param {ComponentContext} context
  * @param {boolean} is_attributes_reactive
+ * @param {boolean} force_check Should be `true` if we can't rely on our cached value, because for example there's also a `style` attribute
  */
-function serialize_style_directives(style_directives, element_id, context, is_attributes_reactive) {
+function serialize_style_directives(
+	style_directives,
+	element_id,
+	context,
+	is_attributes_reactive,
+	force_check
+) {
 	const state = context.state;
 
 	for (const directive of style_directives) {
@@ -99,7 +106,8 @@ function serialize_style_directives(style_directives, element_id, context, is_at
 				element_id,
 				b.literal(directive.name),
 				value,
-				/** @type {Expression} */ (directive.modifiers.includes('important') ? b.true : undefined)
+				/** @type {Expression} */ (directive.modifiers.includes('important') ? b.true : undefined),
+				force_check ? b.true : undefined
 			)
 		);
 
@@ -324,7 +332,8 @@ function serialize_element_spread_attributes(
 				b.id(id),
 				b.object(values),
 				lowercase_attributes,
-				b.literal(context.state.analysis.css.hash)
+				b.literal(context.state.analysis.css.hash),
+				is_ignored(element, 'hydration_attribute_changed') && b.true
 			)
 		)
 	);
@@ -489,7 +498,15 @@ function serialize_element_attribute_update_assignment(element, node_id, attribu
 
 	// The foreign namespace doesn't have any special handling, everything goes through the attr function
 	if (context.state.metadata.namespace === 'foreign') {
-		const statement = b.stmt(b.call('$.set_attribute', node_id, b.literal(name), value));
+		const statement = b.stmt(
+			b.call(
+				'$.set_attribute',
+				node_id,
+				b.literal(name),
+				value,
+				is_ignored(element, 'hydration_attribute_changed') && b.true
+			)
+		);
 
 		if (attribute.metadata.expression.has_state) {
 			const id = state.scope.generate(`${node_id.name}_${name}`);
@@ -525,7 +542,15 @@ function serialize_element_attribute_update_assignment(element, node_id, attribu
 		update = b.stmt(b.assignment('=', b.member(node_id, b.id(name)), value));
 	} else {
 		const callee = name.startsWith('xlink') ? '$.set_xlink_attribute' : '$.set_attribute';
-		update = b.stmt(b.call(callee, node_id, b.literal(name), value));
+		update = b.stmt(
+			b.call(
+				callee,
+				node_id,
+				b.literal(name),
+				value,
+				is_ignored(element, 'hydration_attribute_changed') && b.true
+			)
+		);
 	}
 
 	if (attribute.metadata.expression.has_state) {
@@ -781,9 +806,10 @@ function serialize_inline_component(node, component_name, context, anchor = cont
 			const expression = /** @type {Expression} */ (context.visit(attribute.expression));
 
 			if (
+				dev &&
 				expression.type === 'MemberExpression' &&
-				context.state.options.dev &&
-				context.state.analysis.runes
+				context.state.analysis.runes &&
+				!is_ignored(node, 'binding_property_non_reactive')
 			) {
 				context.state.init.push(serialize_validate_binding(context.state, attribute, expression));
 			}
@@ -791,9 +817,16 @@ function serialize_inline_component(node, component_name, context, anchor = cont
 			if (attribute.name === 'this') {
 				bind_this = attribute.expression;
 			} else {
-				if (context.state.options.dev) {
+				if (dev) {
 					binding_initializers.push(
-						b.stmt(b.call(b.id('$.add_owner_effect'), b.thunk(expression), b.id(component_name)))
+						b.stmt(
+							b.call(
+								b.id('$.add_owner_effect'),
+								b.thunk(expression),
+								b.id(component_name),
+								is_ignored(node, 'ownership_invalid_binding') && b.true
+							)
+						)
 					);
 				}
 
@@ -894,9 +927,7 @@ function serialize_inline_component(node, component_name, context, anchor = cont
 				push_prop(
 					b.init(
 						'children',
-						context.state.options.dev
-							? b.call('$.wrap_snippet', b.id(context.state.analysis.name), slot_fn)
-							: slot_fn
+						dev ? b.call('$.wrap_snippet', b.id(context.state.analysis.name), slot_fn) : slot_fn
 					)
 				);
 
@@ -968,7 +999,7 @@ function serialize_inline_component(node, component_name, context, anchor = cont
 					b.block([
 						...binding_initializers,
 						b.stmt(
-							context.state.options.dev
+							dev
 								? b.call('$.validate_dynamic_component', b.thunk(prev(b.id('$$anchor'))))
 								: prev(b.id('$$anchor'))
 						)
@@ -1696,7 +1727,7 @@ export const template_visitors = {
 		 */
 		const add_template = (template_name, args) => {
 			let call = b.call(get_template_function(namespace, state), ...args);
-			if (context.state.options.dev) {
+			if (dev) {
 				call = b.call(
 					'$.add_locations',
 					call,
@@ -1817,7 +1848,8 @@ export const template_visitors = {
 					context.state.node,
 					b.thunk(/** @type {Expression} */ (context.visit(node.expression))),
 					b.literal(context.state.metadata.namespace === 'svg'),
-					b.literal(context.state.metadata.namespace === 'mathml')
+					b.literal(context.state.metadata.namespace === 'mathml'),
+					is_ignored(node, 'hydration_html_changed') && b.true
 				)
 			)
 		);
@@ -1837,7 +1869,7 @@ export const template_visitors = {
 
 			// we need to eagerly evaluate the expression in order to hit any
 			// 'Cannot access x before initialization' errors
-			if (state.options.dev) {
+			if (dev) {
 				state.init.push(b.stmt(b.call('$.get', declaration.id)));
 			}
 		} else {
@@ -1871,7 +1903,7 @@ export const template_visitors = {
 
 			// we need to eagerly evaluate the expression in order to hit any
 			// 'Cannot access x before initialization' errors
-			if (state.options.dev) {
+			if (dev) {
 				state.init.push(b.stmt(b.call('$.get', tmp)));
 			}
 
@@ -1987,7 +2019,7 @@ export const template_visitors = {
 		/** @type {SourceLocation} */
 		let location = [-1, -1];
 
-		if (context.state.options.dev) {
+		if (dev) {
 			const loc = locator(node.start);
 			if (loc) {
 				location[0] = loc.line;
@@ -2038,6 +2070,7 @@ export const template_visitors = {
 		let img_might_be_lazy = false;
 		let might_need_event_replaying = false;
 		let has_direction_attribute = false;
+		let has_style_attribute = false;
 
 		if (is_custom_element) {
 			// cloneNode is faster, but it does not instantiate the underlying class of the
@@ -2055,6 +2088,9 @@ export const template_visitors = {
 				}
 				if (attribute.name === 'dir') {
 					has_direction_attribute = true;
+				}
+				if (attribute.name === 'style') {
+					has_style_attribute = true;
 				}
 				if (
 					(attribute.name === 'value' || attribute.name === 'checked') &&
@@ -2205,7 +2241,13 @@ export const template_visitors = {
 
 		// class/style directives must be applied last since they could override class/style attributes
 		serialize_class_directives(class_directives, node_id, context, is_attributes_reactive);
-		serialize_style_directives(style_directives, node_id, context, is_attributes_reactive);
+		serialize_style_directives(
+			style_directives,
+			node_id,
+			context,
+			is_attributes_reactive,
+			has_style_attribute || node.metadata.has_spread
+		);
 
 		if (might_need_event_replaying) {
 			context.state.after_update.push(b.stmt(b.call('$.replay_events', node_id)));
@@ -2366,11 +2408,17 @@ export const template_visitors = {
 
 		// class/style directives must be applied last since they could override class/style attributes
 		serialize_class_directives(class_directives, element_id, inner_context, is_attributes_reactive);
-		serialize_style_directives(style_directives, element_id, inner_context, is_attributes_reactive);
+		serialize_style_directives(
+			style_directives,
+			element_id,
+			inner_context,
+			is_attributes_reactive,
+			true
+		);
 
 		const get_tag = b.thunk(/** @type {Expression} */ (context.visit(node.tag)));
 
-		if (context.state.options.dev && context.state.metadata.namespace !== 'foreign') {
+		if (dev && context.state.metadata.namespace !== 'foreign') {
 			if (node.fragment.nodes.length > 0) {
 				context.state.init.push(b.stmt(b.call('$.validate_void_dynamic_element', get_tag)));
 			}
@@ -2395,7 +2443,7 @@ export const template_visitors = {
 			).body
 		);
 
-		const location = context.state.options.dev && locator(node.start);
+		const location = dev && locator(node.start);
 
 		context.state.init.push(
 			b.stmt(
@@ -2614,7 +2662,7 @@ export const template_visitors = {
 
 				// we need to eagerly evaluate the expression in order to hit any
 				// 'Cannot access x before initialization' errors
-				if (context.state.options.dev) {
+				if (dev) {
 					declarations.push(b.stmt(getter));
 				}
 
@@ -2641,7 +2689,7 @@ export const template_visitors = {
 			declarations.push(b.let(node.index, index));
 		}
 
-		if (context.state.options.dev && (flags & EACH_KEYED) !== 0) {
+		if (dev && (flags & EACH_KEYED) !== 0) {
 			context.state.init.push(
 				b.stmt(b.call('$.validate_each_keys', b.thunk(collection), key_function))
 			);
@@ -2834,7 +2882,7 @@ export const template_visitors = {
 
 				// we need to eagerly evaluate the expression in order to hit any
 				// 'Cannot access x before initialization' errors
-				if (context.state.options.dev) {
+				if (dev) {
 					declarations.push(b.stmt(getters[name]));
 				}
 			}
@@ -2848,7 +2896,7 @@ export const template_visitors = {
 		/** @type {Expression} */
 		let snippet = b.arrow(args, body);
 
-		if (context.state.options.dev) {
+		if (dev) {
 			snippet = b.call('$.wrap_snippet', b.id(context.state.analysis.name), snippet);
 		}
 
@@ -2908,8 +2956,9 @@ export const template_visitors = {
 						type === 'AwaitBlock' ||
 						type === 'KeyBlock'
 				)) &&
-			context.state.options.dev &&
-			context.state.analysis.runes
+			dev &&
+			context.state.analysis.runes &&
+			!is_ignored(node, 'binding_property_non_reactive')
 		) {
 			context.state.init.push(
 				serialize_validate_binding(

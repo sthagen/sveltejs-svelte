@@ -1,10 +1,13 @@
 /** @import { CallExpression, Expression, Identifier, Literal, MethodDefinition, PrivateIdentifier, PropertyDefinition, VariableDeclarator } from 'estree' */
 /** @import { Binding } from '#compiler' */
 /** @import { ComponentVisitors, StateField } from '../types.js' */
+import { dev, is_ignored } from '../../../../state.js';
+import * as assert from '../../../../utils/assert.js';
+import { extract_paths } from '../../../../utils/ast.js';
+import * as b from '../../../../utils/builders.js';
+import { regex_invalid_identifier_chars } from '../../../patterns.js';
 import { get_rune } from '../../../scope.js';
 import { is_hoistable_function, transform_inspect_rune } from '../../utils.js';
-import * as b from '../../../../utils/builders.js';
-import * as assert from '../../../../utils/assert.js';
 import {
 	get_prop_source,
 	is_prop_source,
@@ -12,8 +15,6 @@ import {
 	serialize_proxy_reassignment,
 	should_proxy_or_freeze
 } from '../utils.js';
-import { extract_paths } from '../../../../utils/ast.js';
-import { regex_invalid_identifier_chars } from '../../../patterns.js';
 
 /** @type {ComponentVisitors} */
 export const javascript_visitors_runes = {
@@ -148,11 +149,7 @@ export const javascript_visitors_runes = {
 									'set',
 									definition.key,
 									[value],
-									[
-										b.stmt(
-											b.call('$.set', member, serialize_proxy_reassignment(value, field.id, state))
-										)
-									]
+									[b.stmt(b.call('$.set', member, serialize_proxy_reassignment(value, field.id)))]
 								)
 							);
 						}
@@ -170,7 +167,7 @@ export const javascript_visitors_runes = {
 							);
 						}
 
-						if ((field.kind === 'derived' || field.kind === 'derived_call') && state.options.dev) {
+						if (dev && (field.kind === 'derived' || field.kind === 'derived_call')) {
 							body.push(
 								b.method(
 									'set',
@@ -188,7 +185,7 @@ export const javascript_visitors_runes = {
 			body.push(/** @type {MethodDefinition} **/ (visit(definition, child_state)));
 		}
 
-		if (state.options.dev && public_state.size > 0) {
+		if (dev && public_state.size > 0) {
 			// add an `[$.ADD_OWNER]` method so that a class with state fields can widen ownership
 			body.push(
 				b.method(
@@ -200,7 +197,9 @@ export const javascript_visitors_runes = {
 							b.call(
 								'$.add_owner',
 								b.call('$.get', b.member(b.this, b.private_id(name))),
-								b.id('owner')
+								b.id('owner'),
+								b.literal(false),
+								is_ignored(node, 'ownership_invalid_binding') && b.true
 							)
 						)
 					),
@@ -248,7 +247,7 @@ export const javascript_visitors_runes = {
 					/** @type {Expression[]} */
 					const args = [b.id('$$props'), b.array(seen.map((name) => b.literal(name)))];
 
-					if (state.options.dev) {
+					if (dev) {
 						// include rest name, so we can provide informative error messages
 						args.push(b.literal(declarator.id.name));
 					}
@@ -287,7 +286,7 @@ export const javascript_visitors_runes = {
 							/** @type {Expression[]} */
 							const args = [b.id('$$props'), b.array(seen.map((name) => b.literal(name)))];
 
-							if (state.options.dev) {
+							if (dev) {
 								// include rest name, so we can provide informative error messages
 								args.push(b.literal(/** @type {Identifier} */ (property.argument).name));
 							}
@@ -449,7 +448,11 @@ export const javascript_visitors_runes = {
 		}
 
 		if (rune === '$state.snapshot') {
-			return b.call('$.snapshot', /** @type {Expression} */ (context.visit(node.arguments[0])));
+			return b.call(
+				'$.snapshot',
+				/** @type {Expression} */ (context.visit(node.arguments[0])),
+				is_ignored(node, 'state_snapshot_uncloneable') && b.true
+			);
 		}
 
 		if (rune === '$state.is') {
@@ -474,7 +477,7 @@ export const javascript_visitors_runes = {
 	BinaryExpression(node, { state, visit, next }) {
 		const operator = node.operator;
 
-		if (state.options.dev) {
+		if (dev) {
 			if (operator === '===' || operator === '!==') {
 				return b.call(
 					'$.strict_equals',
