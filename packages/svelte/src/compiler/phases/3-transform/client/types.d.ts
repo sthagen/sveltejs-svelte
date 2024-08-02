@@ -35,6 +35,7 @@ export interface ComponentClientTransformState extends ClientTransformState {
 	readonly options: ValidatedCompileOptions;
 	readonly hoisted: Array<Statement | ModuleDeclaration>;
 	readonly events: Set<string>;
+	readonly is_instance: boolean;
 
 	/** Stuff that happens before the render effect(s) */
 	readonly before_init: Statement[];
@@ -73,12 +74,12 @@ export interface ComponentClientTransformState extends ClientTransformState {
 }
 
 export interface StateField {
-	kind: 'state' | 'frozen_state' | 'derived' | 'derived_call';
+	kind: 'state' | 'frozen_state' | 'derived' | 'derived_by';
 	id: PrivateIdentifier;
 }
 
 export type Context = import('zimmerframe').Context<SvelteNode, ClientTransformState>;
-export type Visitors = import('zimmerframe').Visitors<SvelteNode, ClientTransformState>;
+export type Visitors = import('zimmerframe').Visitors<SvelteNode, any>;
 
 export type ComponentContext = import('zimmerframe').Context<
 	SvelteNode,
