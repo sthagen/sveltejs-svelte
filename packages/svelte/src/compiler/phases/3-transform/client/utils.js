@@ -8,7 +8,8 @@ import {
 	PROPS_IS_LAZY_INITIAL,
 	PROPS_IS_IMMUTABLE,
 	PROPS_IS_RUNES,
-	PROPS_IS_UPDATED
+	PROPS_IS_UPDATED,
+	PROPS_IS_BINDABLE
 } from '../../../../constants.js';
 import { dev } from '../../../state.js';
 import { get_value } from './visitors/shared/declarations.js';
@@ -20,7 +21,7 @@ import { get_value } from './visitors/shared/declarations.js';
  */
 export function is_state_source(binding, state) {
 	return (
-		(binding.kind === 'state' || binding.kind === 'frozen_state') &&
+		(binding.kind === 'state' || binding.kind === 'raw_state') &&
 		(!state.analysis.immutable || binding.reassigned || state.analysis.accessors)
 	);
 }
@@ -168,6 +169,10 @@ export function get_prop_source(binding, state, name, initial) {
 
 	let flags = 0;
 
+	if (binding.kind === 'bindable_prop') {
+		flags |= PROPS_IS_BINDABLE;
+	}
+
 	if (state.analysis.immutable) {
 		flags |= PROPS_IS_IMMUTABLE;
 	}
@@ -238,7 +243,7 @@ export function is_prop_source(binding, state) {
  * @param {Expression} node
  * @param {Scope | null} scope
  */
-export function should_proxy_or_freeze(node, scope) {
+export function should_proxy(node, scope) {
 	if (
 		!node ||
 		node.type === 'Literal' ||
@@ -251,9 +256,10 @@ export function should_proxy_or_freeze(node, scope) {
 	) {
 		return false;
 	}
+
 	if (node.type === 'Identifier' && scope !== null) {
 		const binding = scope.get(node.name);
-		// Let's see if the reference is something that can be proxied or frozen
+		// Let's see if the reference is something that can be proxied
 		if (
 			binding !== null &&
 			!binding.reassigned &&
@@ -263,24 +269,11 @@ export function should_proxy_or_freeze(node, scope) {
 			binding.initial.type !== 'ImportDeclaration' &&
 			binding.initial.type !== 'EachBlock'
 		) {
-			return should_proxy_or_freeze(binding.initial, null);
+			return should_proxy(binding.initial, null);
 		}
 	}
-	return true;
-}
 
-/**
- * Port over the location information from the source to the target identifier.
- * but keep the target as-is (i.e. a new id is created).
- * This ensures esrap can generate accurate source maps.
- * @param {Identifier} target
- * @param {Identifier} source
- */
-export function with_loc(target, source) {
-	if (source.loc) {
-		return { ...target, loc: source.loc };
-	}
-	return target;
+	return true;
 }
 
 /**

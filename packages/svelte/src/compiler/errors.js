@@ -3,7 +3,7 @@
 import { CompileDiagnostic } from './utils/compile_diagnostic.js';
 
 /** @typedef {{ start?: number, end?: number }} NodeLike */
-export class InternalCompileError extends CompileDiagnostic {
+class InternalCompileError extends CompileDiagnostic {
 	name = 'CompileError';
 
 	/**
@@ -413,6 +413,15 @@ export function store_invalid_scoped_subscription(node) {
  */
 export function store_invalid_subscription(node) {
 	e(node, "store_invalid_subscription", "Cannot reference store value inside `<script context=\"module\">`");
+}
+
+/**
+ * Cannot reference store value outside a `.svelte` file
+ * @param {null | number | NodeLike} node
+ * @returns {never}
+ */
+export function store_invalid_subscription_module(node) {
+	e(node, "store_invalid_subscription_module", "Cannot reference store value outside a `.svelte` file");
 }
 
 /**

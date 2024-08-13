@@ -1,5 +1,27 @@
 # svelte
 
+## 5.0.0-next.219
+
+### Patch Changes
+
+- feat: add compiler error when encountering a $-prefixed store value outside a .svelte file ([#12799](https://github.com/sveltejs/svelte/pull/12799))
+
+## 5.0.0-next.218
+
+### Patch Changes
+
+- breaking: replace `$state.frozen` with `$state.raw` ([#12808](https://github.com/sveltejs/svelte/pull/12808))
+
+- fix: ensure inspect effects are skipped from effect parent logic ([#12810](https://github.com/sveltejs/svelte/pull/12810))
+
+## 5.0.0-next.217
+
+### Patch Changes
+
+- feat: deprecate `svelte:component` ([#12694](https://github.com/sveltejs/svelte/pull/12694))
+
+- feat: treat tag with `.` as a component, even if lowercase ([#12798](https://github.com/sveltejs/svelte/pull/12798))
+
 ## 5.0.0-next.216
 
 ### Patch Changes

@@ -927,7 +927,7 @@ declare module 'svelte/compiler' {
 			| 'bindable_prop'
 			| 'rest_prop'
 			| 'state'
-			| 'frozen_state'
+			| 'raw_state'
 			| 'derived'
 			| 'each'
 			| 'snippet'
@@ -1851,6 +1851,7 @@ declare module 'svelte/compiler' {
 		index?: string;
 		key?: Expression;
 		metadata: {
+			expression: ExpressionMetadata;
 			keyed: boolean;
 			contains_group_binding: boolean;
 			/** Set if something in the array expression is shadowed within the each block */
@@ -2305,6 +2306,17 @@ declare module 'svelte/store' {
 		 */
 		update(this: void, updater: Updater<T>): void;
 	}
+	export function toStore<V>(get: () => V, set: (v: V) => void): Writable<V>;
+
+	export function toStore<V>(get: () => V): Readable<V>;
+
+	export function fromStore<V>(store: Writable<V>): {
+		current: V;
+	};
+
+	export function fromStore<V>(store: Readable<V>): {
+		readonly current: V;
+	};
 	/**
 	 * Creates a `Readable` store that allows reading by subscription.
 	 *
@@ -2878,12 +2890,13 @@ declare namespace $state {
 						: never;
 
 	/**
-	 * Declares reactive read-only state that is shallowly immutable.
+	 * Declares state that is _not_ made deeply reactive — instead of mutating it,
+	 * you must reassign it.
 	 *
 	 * Example:
 	 * ```ts
 	 * <script>
-	 *   let items = $state.frozen([0]);
+	 *   let items = $state.raw([0]);
 	 *
 	 *   const addItem = () => {
 	 *     items = [...items, items.length];
@@ -2899,8 +2912,8 @@ declare namespace $state {
 	 *
 	 * @param initial The initial value
 	 */
-	export function frozen<T>(initial: T): Readonly<T>;
-	export function frozen<T>(): Readonly<T> | undefined;
+	export function raw<T>(initial: T): T;
+	export function raw<T>(): T | undefined;
 	/**
 	 * To take a static snapshot of a deeply reactive `$state` proxy, use `$state.snapshot`:
 	 *

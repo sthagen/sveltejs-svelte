@@ -6,14 +6,13 @@ import {
 	EACH_INDEX_REACTIVE,
 	EACH_IS_ANIMATED,
 	EACH_IS_CONTROLLED,
-	EACH_IS_STRICT_EQUALS,
-	EACH_ITEM_REACTIVE,
-	EACH_KEYED
+	EACH_ITEM_IMMUTABLE,
+	EACH_ITEM_REACTIVE
 } from '../../../../../constants.js';
 import { dev } from '../../../../state.js';
 import { extract_paths, object } from '../../../../utils/ast.js';
 import * as b from '../../../../utils/builders.js';
-import { build_getter, with_loc } from '../utils.js';
+import { build_getter } from '../utils.js';
 import { get_value } from './shared/declarations.js';
 
 /**
@@ -42,24 +41,43 @@ export function EachBlock(node, context) {
 
 	let flags = 0;
 
-	if (node.metadata.keyed) {
-		flags |= EACH_KEYED;
+	if (node.metadata.keyed && node.index) {
+		flags |= EACH_INDEX_REACTIVE;
+	}
 
-		if (node.index) {
-			flags |= EACH_INDEX_REACTIVE;
+	const key_is_item =
+		node.key?.type === 'Identifier' &&
+		node.context.type === 'Identifier' &&
+		node.context.name === node.key.name;
+
+	// if the each block expression references a store subscription, we need
+	// to use mutable stores internally
+	let uses_store;
+
+	for (const binding of node.metadata.expression.dependencies) {
+		if (binding.kind === 'store_sub') {
+			uses_store = true;
+			break;
+		}
+	}
+
+	for (const binding of node.metadata.expression.dependencies) {
+		// if the expression doesn't reference any external state, we don't need to
+		// create a source for the item. TODO cover more cases (e.g. `x.filter(y)`
+		// should also qualify if `y` doesn't reference state, and non-state
+		// bindings should also be fine
+		if (binding.scope.function_depth >= context.state.scope.function_depth) {
+			continue;
 		}
 
-		// In runes mode, if key === item, we don't need to wrap the item in a source
-		const key_is_item =
-			/** @type {Expression} */ (node.key).type === 'Identifier' &&
-			node.context.type === 'Identifier' &&
-			node.context.name === node.key.name;
-
-		if (!context.state.analysis.runes || !key_is_item) {
+		if (!context.state.analysis.runes || !key_is_item || uses_store) {
 			flags |= EACH_ITEM_REACTIVE;
+			break;
 		}
-	} else {
-		flags |= EACH_ITEM_REACTIVE;
+	}
+
+	if (context.state.analysis.runes && !uses_store) {
+		flags |= EACH_ITEM_IMMUTABLE;
 	}
 
 	// Since `animate:` can only appear on elements that are the sole child of a keyed each block,
@@ -77,10 +95,6 @@ export function EachBlock(node, context) {
 
 	if (each_node_meta.is_controlled) {
 		flags |= EACH_IS_CONTROLLED;
-	}
-
-	if (context.state.analysis.runes) {
-		flags |= EACH_IS_STRICT_EQUALS;
 	}
 
 	// If the array is a store expression, we need to invalidate it when the array is changed.
@@ -134,21 +148,13 @@ export function EachBlock(node, context) {
 	const index =
 		each_node_meta.contains_group_binding || !node.index ? each_node_meta.index : b.id(node.index);
 	const item = each_node_meta.item;
-	const binding = /** @type {Binding} */ (context.state.scope.get(item.name));
-	const getter = (/** @type {Identifier} */ id) => {
-		const item_with_loc = with_loc(item, id);
-		return b.call('$.unwrap', item_with_loc);
-	};
 
 	if (node.index) {
-		child_state.transform[node.index] = {
-			read: (id) => {
-				const index_with_loc = with_loc(index, id);
-				return (flags & EACH_INDEX_REACTIVE) === 0
-					? index_with_loc
-					: b.call('$.get', index_with_loc);
-			}
-		};
+		if ((flags & EACH_INDEX_REACTIVE) !== 0) {
+			child_state.transform[node.index] = { read: get_value };
+		} else {
+			delete child_state.transform[node.index];
+		}
 
 		delete key_state.transform[node.index];
 	}
@@ -172,7 +178,7 @@ export function EachBlock(node, context) {
 
 	if (node.context.type === 'Identifier') {
 		child_state.transform[node.context.name] = {
-			read: getter,
+			read: (flags & EACH_ITEM_REACTIVE) !== 0 ? get_value : (node) => node,
 			assign: (_, value) => {
 				const left = b.member(
 					each_node_meta.array_name ? b.call(each_node_meta.array_name) : collection,
@@ -187,12 +193,12 @@ export function EachBlock(node, context) {
 
 		delete key_state.transform[node.context.name];
 	} else {
-		const unwrapped = getter(binding.node);
-		const paths = extract_paths(node.context);
+		const unwrapped = (flags & EACH_ITEM_REACTIVE) !== 0 ? b.call('$.get', item) : item;
 
-		for (const path of paths) {
+		for (const path of extract_paths(node.context)) {
 			const name = /** @type {Identifier} */ (path.node).name;
 			const needs_derived = path.has_default_value; // to ensure that default value is only called once
+
 			const fn = b.thunk(
 				/** @type {Expression} */ (context.visit(path.expression?.(unwrapped), child_state))
 			);
@@ -203,11 +209,11 @@ export function EachBlock(node, context) {
 
 			child_state.transform[name] = {
 				read,
-				assign: (node, value) => {
+				assign: (_, value) => {
 					const left = /** @type {Pattern} */ (path.update_expression(unwrapped));
 					return b.sequence([b.assignment('=', left, value), ...sequence]);
 				},
-				mutate: (node, mutation) => {
+				mutate: (_, mutation) => {
 					return b.sequence([mutation, ...sequence]);
 				}
 			};
@@ -241,7 +247,7 @@ export function EachBlock(node, context) {
 		declarations.push(b.let(node.index, index));
 	}
 
-	if (dev && (flags & EACH_KEYED) !== 0) {
+	if (dev && node.metadata.keyed) {
 		context.state.init.push(
 			b.stmt(b.call('$.validate_each_keys', b.thunk(collection), key_function))
 		);
