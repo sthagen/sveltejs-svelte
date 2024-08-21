@@ -349,6 +349,16 @@ export function rune_missing_parentheses(node) {
 }
 
 /**
+ * The `%name%` rune has been removed
+ * @param {null | number | NodeLike} node
+ * @param {string} name
+ * @returns {never}
+ */
+export function rune_removed(node, name) {
+	e(node, "rune_removed", `The \`${name}\` rune has been removed`);
+}
+
+/**
  * `%name%` is now `%replacement%`
  * @param {null | number | NodeLike} node
  * @param {string} name
@@ -774,6 +784,15 @@ export function block_unexpected_close(node) {
  */
 export function component_invalid_directive(node) {
 	e(node, "component_invalid_directive", "This type of directive is not valid on components");
+}
+
+/**
+ * Component name must be a valid variable name or dot notation expression
+ * @param {null | number | NodeLike} node
+ * @returns {never}
+ */
+export function component_invalid_name(node) {
+	e(node, "component_invalid_name", "Component name must be a valid variable name or dot notation expression");
 }
 
 /**

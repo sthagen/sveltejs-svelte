@@ -61,6 +61,10 @@ export function Identifier(node, context) {
 						e.rune_renamed(parent, '$state.frozen', '$state.raw');
 					}
 
+					if (name === '$state.is') {
+						e.rune_removed(parent, '$state.is');
+					}
+
 					e.rune_invalid_name(parent, name);
 				}
 			}
@@ -95,7 +99,7 @@ export function Identifier(node, context) {
 			context.state.function_depth === binding.scope.function_depth &&
 			// If we have $state that can be proxied or frozen and isn't re-assigned, then that means
 			// it's likely not using a primitive value and thus this warning isn't that helpful.
-			((binding.kind === 'state' &&
+			(((binding.kind === 'state' || binding.kind === 'linked_state') &&
 				(binding.reassigned ||
 					(binding.initial?.type === 'CallExpression' &&
 						binding.initial.arguments.length === 1 &&

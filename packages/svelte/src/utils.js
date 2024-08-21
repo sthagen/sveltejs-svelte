@@ -222,7 +222,7 @@ export function is_dom_property(name) {
 	return DOM_PROPERTIES.includes(name);
 }
 
-const PASSIVE_EVENTS = ['wheel', 'touchstart', 'touchmove', 'touchend', 'touchcancel'];
+const PASSIVE_EVENTS = ['wheel', 'mousewheel', 'touchstart', 'touchmove'];
 
 /**
  * Returns `true` if `name` is a passive event
@@ -393,9 +393,9 @@ export function is_mathml(name) {
 
 const RUNES = /** @type {const} */ ([
 	'$state',
+	'$state.link',
 	'$state.raw',
 	'$state.snapshot',
-	'$state.is',
 	'$props',
 	'$bindable',
 	'$derived',

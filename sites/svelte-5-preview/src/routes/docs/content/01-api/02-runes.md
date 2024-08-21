@@ -64,6 +64,51 @@ Only plain objects and arrays [are made deeply reactive](/#H4sIAAAAAAAAE42QwWrDM
 
 In non-runes mode, a `let` declaration is treated as reactive state if it is updated at some point. Unlike `$state(...)`, which works anywhere in your app, `let` only behaves this way at the top level of a component.
 
+## `$state.link`
+
+Linked state stays up to date with its input:
+
+```js
+let a = $state(0);
+let b = $state.link(a);
+
+a = 1;
+console.log(a, b); // 1, 1
+```
+
+You can temporarily _unlink_ state. It will be _relinked_ when the input value changes:
+
+```js
+let a = 1;
+let b = 1;
+// ---cut---
+b = 2; // unlink
+console.log(a, b); // 1, 2
+
+a = 3; // relink
+console.log(a, b); // 3, 3
+```
+
+As with `$state`, if `$state.link` is passed a plain object or array it will be made deeply reactive. If passed an existing state proxy it will be reused, meaning that mutating the linked state will mutate the original. To clone a state proxy, you can use [`$state.snapshot`](#$state-snapshot).
+
+If you pass a callback to `$state.link`, changes to the input value will invoke the callback rather than updating the linked state, allowing you to choose whether to (for example) preserve or discard local changes, or merge incoming changes with local ones:
+
+```js
+let { stuff } = $props();
+
+let incoming = $state();
+let hasUnsavedChanges = $state(false);
+
+let current = $state.link({ ...stuff }, (stuff) => {
+	if (hasUnsavedChanges) {
+		incoming = stuff;
+	} else {
+		incoming = null;
+		current = stuff;
+	}
+});
+```
+
 ## `$state.raw`
 
 State declared with `$state.raw` cannot be mutated; it can only be _reassigned_. In other words, rather than assigning to a property of an object, or using an array method like `push`, replace the object or array altogether if you'd like to update it:
@@ -107,26 +152,6 @@ To take a static snapshot of a deeply reactive `$state` proxy, use `$state.snaps
 ```
 
 This is handy when you want to pass some state to an external library or API that doesn't expect a proxy, such as `structuredClone`.
-
-## `$state.is`
-
-Sometimes you might need to compare two values, one of which is a reactive `$state(...)` proxy. For this you can use `$state.is(a, b)`:
-
-```svelte
-<script>
-	let foo = $state({});
-	let bar = {};
-
-	foo.bar = bar;
-
-	console.log(foo.bar === bar); // false — `foo.bar` is a reactive proxy
-	console.log($state.is(foo.bar, bar)); // true
-</script>
-```
-
-This is handy when you might want to check if the object exists within a deeply reactive object/array.
-
-> `$state.is` uses `Object.is` to check if two values are the same value.
 
 ## `$derived`
 

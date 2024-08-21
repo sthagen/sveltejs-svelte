@@ -141,13 +141,6 @@ export function CallExpression(node, context) {
 			}
 
 			break;
-
-		case '$state.is':
-			if (node.arguments.length !== 2) {
-				e.rune_invalid_arguments_length(node, rune, 'exactly two arguments');
-			}
-
-			break;
 	}
 
 	if (context.state.expression && !is_pure(node.callee, context)) {
@@ -176,7 +169,7 @@ export function CallExpression(node, context) {
 	}
 
 	// `$inspect(foo)` or `$derived(foo) should not trigger the `static-state-reference` warning
-	if (rune === '$inspect' || rune === '$derived') {
+	if (rune === '$inspect' || rune === '$derived' || rune === '$state.link') {
 		context.next({ ...context.state, function_depth: context.state.function_depth + 1 });
 	} else {
 		context.next();
