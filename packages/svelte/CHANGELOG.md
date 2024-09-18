@@ -1,5 +1,25 @@
 # svelte
 
+## 5.0.0-next.250
+
+### Patch Changes
+
+- fix: correctly migrate sequence expressions ([#13291](https://github.com/sveltejs/svelte/pull/13291))
+
+- fix: avoid disconnecting deriveds that are still active ([#13292](https://github.com/sveltejs/svelte/pull/13292))
+
+- feat: Add accessibility warnings for buttons and anchors without explicit labels and content ([#13130](https://github.com/sveltejs/svelte/pull/13130))
+
+## 5.0.0-next.249
+
+### Patch Changes
+
+- fix: ensure snapshot logs don't affect dependency graph ([#13286](https://github.com/sveltejs/svelte/pull/13286))
+
+- fix: allow custom element styles to be updated in HMR mode ([#13225](https://github.com/sveltejs/svelte/pull/13225))
+
+- fix: inject styles correctly when mounting inside an iframe ([#13225](https://github.com/sveltejs/svelte/pull/13225))
+
 ## 5.0.0-next.248
 
 ### Patch Changes
