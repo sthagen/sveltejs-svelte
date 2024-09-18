@@ -22,7 +22,8 @@ import {
 	BLOCK_EFFECT,
 	ROOT_EFFECT,
 	LEGACY_DERIVED_PROP,
-	DISCONNECTED
+	DISCONNECTED,
+	EFFECT_QUEUED
 } from './constants.js';
 import { flush_tasks } from './dom/task.js';
 import { add_owner } from './dev/ownership.js';
@@ -511,16 +512,15 @@ function flush_queued_root_effects(root_effects) {
 		for (var i = 0; i < length; i++) {
 			var effect = root_effects[i];
 
-			// When working with custom elements, the root effects might not have a root
-			if (effect.first === null && (effect.f & BRANCH_EFFECT) === 0) {
-				flush_queued_effects([effect]);
-			} else {
-				/** @type {Effect[]} */
-				var collected_effects = [];
-
-				process_effects(effect, collected_effects);
-				flush_queued_effects(collected_effects);
+			if ((effect.f & EFFECT_QUEUED) !== 0) {
+				effect.f ^= EFFECT_QUEUED;
 			}
+
+			/** @type {Effect[]} */
+			var collected_effects = [];
+
+			process_effects(effect, collected_effects);
+			flush_queued_effects(collected_effects);
 		}
 	} finally {
 		is_flushing_effect = previously_flushing_effect;
@@ -595,7 +595,12 @@ export function schedule_effect(signal) {
 
 		if ((flags & BRANCH_EFFECT) !== 0) {
 			if ((flags & CLEAN) === 0) return;
-			set_signal_status(effect, MAYBE_DIRTY);
+			effect.f ^= CLEAN;
+		}
+
+		if ((flags & ROOT_EFFECT) !== 0) {
+			if ((flags & EFFECT_QUEUED) !== 0) return;
+			effect.f ^= EFFECT_QUEUED;
 		}
 	}
 
@@ -642,14 +647,7 @@ function process_effects(effect, collected_effects) {
 					continue;
 				}
 			} else if ((flags & EFFECT) !== 0) {
-				if (is_branch || is_clean) {
-					if (child !== null) {
-						current_effect = child;
-						continue;
-					}
-				} else {
-					effects.push(current_effect);
-				}
+				effects.push(current_effect);
 			}
 		}
 
@@ -1060,15 +1058,18 @@ export function pop(component) {
 		const component_effects = context_stack_item.e;
 		if (component_effects !== null) {
 			var previous_effect = active_effect;
+			var previous_reaction = active_reaction;
 			context_stack_item.e = null;
 			try {
 				for (var i = 0; i < component_effects.length; i++) {
 					var component_effect = component_effects[i];
-					set_active_effect(component_effect.parent);
+					set_active_effect(component_effect.effect);
+					set_active_reaction(component_effect.reaction);
 					effect(component_effect.fn);
 				}
 			} finally {
 				set_active_effect(previous_effect);
+				set_active_reaction(previous_reaction);
 			}
 		}
 		component_context = context_stack_item.p;

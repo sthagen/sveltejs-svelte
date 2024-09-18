@@ -1,5 +1,21 @@
 # svelte
 
+## 5.0.0-next.252
+
+### Patch Changes
+
+- fix: handle `$Props` interface during migration ([#13305](https://github.com/sveltejs/svelte/pull/13305))
+
+- fix: attach effects-inside-deriveds to the parent of the derived ([#13309](https://github.com/sveltejs/svelte/pull/13309))
+
+- fix: simplify and robustify appending styles ([#13303](https://github.com/sveltejs/svelte/pull/13303))
+
+## 5.0.0-next.251
+
+### Patch Changes
+
+- fix: improve performance of scheduling effects ([#13300](https://github.com/sveltejs/svelte/pull/13300))
+
 ## 5.0.0-next.250
 
 ### Patch Changes
