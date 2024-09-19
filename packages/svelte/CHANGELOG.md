@@ -1,5 +1,19 @@
 # svelte
 
+## 5.0.0-next.254
+
+### Patch Changes
+
+- feat: account for `zoom` when calculating animation transforms ([#13317](https://github.com/sveltejs/svelte/pull/13317))
+
+## 5.0.0-next.253
+
+### Patch Changes
+
+- fix: delete transformers shadowed by unreassigned state ([#13316](https://github.com/sveltejs/svelte/pull/13316))
+
+- fix: don't make wheel events passive by default ([#13322](https://github.com/sveltejs/svelte/pull/13322))
+
 ## 5.0.0-next.252
 
 ### Patch Changes
