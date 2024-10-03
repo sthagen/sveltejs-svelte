@@ -12,8 +12,8 @@ import { get_rune } from '../phases/scope.js';
 import { reset, reset_warning_filter } from '../state.js';
 import { extract_identifiers } from '../utils/ast.js';
 import { migrate_svelte_ignore } from '../utils/extract_svelte_ignore.js';
-import { determine_slot } from '../utils/slot.js';
 import { validate_component_options } from '../validate-options.js';
+import { is_svg, is_void } from '../../utils.js';
 
 const regex_style_tags = /(<style[^>]+>)([\S\s]*?)(<\/style>)/g;
 const style_placeholder = '/*$$__STYLE_CONTENT__$$*/';
@@ -53,6 +53,8 @@ export function migrate(source) {
 		const str = new MagicString(source);
 		const analysis = analyze_component(parsed, source, combined_options);
 		const indent = guess_indent(source);
+
+		str.replaceAll(/(<svelte:options\s.*?\s?)accessors\s?/g, (_, $1) => $1);
 
 		for (const content of style_contents) {
 			str.overwrite(content[0], content[0] + style_placeholder.length, content[1]);
@@ -150,6 +152,7 @@ export function migrate(source) {
 				props = `...${state.names.props}`;
 			} else {
 				props = state.props
+					.filter((prop) => !prop.type_only)
 					.map((prop) => {
 						let prop_str =
 							prop.local === prop.exported ? prop.local : `${prop.exported}: ${prop.local}`;
@@ -236,7 +239,9 @@ export function migrate(source) {
 				dependencies.some(
 					(dep) =>
 						!ids.includes(dep) &&
-						/** @type {number} */ (dep.node.start) > /** @type {number} */ (node.start)
+						(dep.kind === 'prop' || dep.kind === 'bindable_prop'
+							? state.props_insertion_point
+							: /** @type {number} */ (dep.node.start)) > /** @type {number} */ (node.start)
 				)
 			) {
 				needs_reordering = true;
@@ -265,6 +270,13 @@ export function migrate(source) {
 			);
 		}
 
+		if (state.props.length > 0 && state.analysis.accessors) {
+			str.appendRight(
+				insertion_point,
+				`\n${indent}export {${state.props.reduce((acc, prop) => (prop.slot_name || prop.type_only ? acc : `${acc}\n${indent}\t${prop.local},`), '')}\n${indent}}\n`
+			);
+		}
+
 		if (!parsed.instance && need_script) {
 			str.appendRight(insertion_point, '\n</script>\n\n');
 		}
@@ -282,7 +294,7 @@ export function migrate(source) {
  *  str: MagicString;
  *  analysis: ComponentAnalysis;
  *  indent: string;
- *  props: Array<{ local: string; exported: string; init: string; bindable: boolean; slot_name?: string; optional: boolean; type: string; comment?: string }>;
+ *  props: Array<{ local: string; exported: string; init: string; bindable: boolean; slot_name?: string; optional: boolean; type: string; comment?: string, type_only?: boolean }>;
  *  props_insertion_point: number;
  *  has_props_rune: boolean;
  *  end: number;
@@ -419,6 +431,7 @@ const instance_script = {
 						: '';
 					prop.bindable = binding.updated;
 					prop.exported = binding.prop_alias || name;
+					prop.type_only = false;
 				} else {
 					state.props.push({
 						local: name,
@@ -576,6 +589,15 @@ const template = {
 	},
 	RegularElement(node, { state, next }) {
 		handle_events(node, state);
+		// Strip off any namespace from the beginning of the node name.
+		const node_name = node.name.replace(/[a-zA-Z-]*:/g, '');
+
+		if (state.analysis.source[node.end - 2] === '/' && !is_void(node_name) && !is_svg(node_name)) {
+			let trimmed_position = node.end - 2;
+			while (state.str.original.charAt(trimmed_position - 1) === ' ') trimmed_position--;
+			state.str.remove(trimmed_position, node.end - 1);
+			state.str.appendRight(node.end, `</${node.name}>`);
+		}
 		next();
 	},
 	SvelteElement(node, { state, next }) {
@@ -625,21 +647,30 @@ const template = {
 					part.type === 'EachBlock' ||
 					part.type === 'AwaitBlock' ||
 					part.type === 'IfBlock' ||
-					part.type === 'KeyBlock' ||
 					part.type === 'SnippetBlock' ||
 					part.type === 'Component' ||
 					part.type === 'SvelteComponent'
 				) {
+					let position = node.start;
+					if (i !== path.length - 1) {
+						for (let modifier = 1; modifier < path.length - i; modifier++) {
+							const path_part = path[i + modifier];
+							if ('start' in path_part) {
+								position = /** @type {number} */ (path_part.start);
+								break;
+							}
+						}
+					}
 					const indent = state.str.original.substring(
-						state.str.original.lastIndexOf('\n', node.start) + 1,
-						node.start
+						state.str.original.lastIndexOf('\n', position) + 1,
+						position
 					);
 					state.str.prependLeft(
-						node.start,
+						position,
 						`{@const ${expression} = ${current_expression}}\n${indent}`
 					);
 					needs_derived = false;
-					continue;
+					break;
 				}
 			}
 			if (needs_derived) {
@@ -989,7 +1020,8 @@ function handle_identifier(node, state, path) {
 							bindable: false,
 							optional: member.optional,
 							type,
-							comment
+							comment,
+							type_only: true
 						});
 					}
 				}
