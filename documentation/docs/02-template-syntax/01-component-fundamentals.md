@@ -29,7 +29,7 @@ A `<script>` block contains JavaScript (or TypeScript, when adding the `lang="ts
 
 Svelte uses the `$props` rune to declare _properties_ or _props_, which means describing the public interface of the component which becomes accessible to consumers of the component.
 
-> `$props` is one of several runes, which are special hints for Svelte's compiler to make things reactive.
+> [!NOTE] `$props` is one of several runes, which are special hints for Svelte's compiler to make things reactive.
 
 ```svelte
 <script>
@@ -112,7 +112,7 @@ If you export a `const`, `class` or `function`, it is readonly from outside the 
 </script>
 ```
 
-Readonly props can be accessed as properties on the element, tied to the component using [`bind:this` syntax](/docs/component-directives#bind-this).
+Readonly props can be accessed as properties on the element, tied to the component using [`bind:this` syntax](bindings#bind:this).
 
 ### Reactive variables
 

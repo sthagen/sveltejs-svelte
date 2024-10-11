@@ -94,7 +94,7 @@ $effect(() => {
 });
 ```
 
-An effect only reruns when the object it reads changes, not when a property inside it changes. (If you want to observe changes _inside_ an object at dev time, you can use [`$inspect`](/docs/svelte/misc/debugging#$inspect).)
+An effect only reruns when the object it reads changes, not when a property inside it changes. (If you want to observe changes _inside_ an object at dev time, you can use [`$inspect`](debugging#$inspect).)
 
 ```svelte
 <script>
@@ -164,7 +164,7 @@ In general, `$effect` is best considered something of an escape hatch — useful
 </script>
 ```
 
-> For things that are more complicated than a simple expression like `count * 2`, you can also use [`$derived.by`](#$derived-by).
+> [!NOTE] For things that are more complicated than a simple expression like `count * 2`, you can also use [`$derived.by`](#$derived-by).
 
 You might be tempted to do something convoluted with effects to link one value to another. The following example shows two inputs for "money spent" and "money left" that are connected to each other. If you update one, the other should update accordingly. Don't use effects for this ([demo](/#H4sIAAAAAAAACpVRy2rDMBD8lWXJwYE0dg-9KFYg31H3oNirIJBlYa1DjPG_F8l1XEop9LgzOzP7mFAbSwHF-4ROtYQCL97jAXn0sQh3skx4wNANfR2RMtS98XyuXMWWGLhjZUHCa1GcVix4cgwSdoEVU1bsn4wl_Y1I2kS6inekNdWcZXuQZ5giFDWpfwl5WYyT2fynbB1g1UWbTVbm2w6utOpKNq1TGucHhri6rLBX7kYVwtW4RtyVHUhOyXeGVj3klLxnyJP0i8lXNJUx6en-v6A48K85kTimpi0sYj-yAo-Wlh9FcL1LY4K3ahSgLT1OC3ZTXkBxfKN2uVC6T5LjAduuMdpQg4L7geaP-RNHPuClMQIAAA==)):
 
@@ -252,7 +252,7 @@ If you need to use bindings, for whatever reason (for example when you want some
 </label>
 ```
 
-If you absolutely have to update `$state` within an effect and run into an infinite loop because you read and write to the same `$state`, use [untrack](functions#untrack).
+If you absolutely have to update `$state` within an effect and run into an infinite loop because you read and write to the same `$state`, use [untrack](svelte#untrack).
 
 ## `$effect.pre`
 
