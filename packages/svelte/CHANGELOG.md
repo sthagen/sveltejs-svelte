@@ -1,5 +1,49 @@
 # svelte
 
+## 5.0.0-next.270
+
+### Patch Changes
+
+- fix: bail out if slot name changes and $slots assigned to variable ([#13678](https://github.com/sveltejs/svelte/pull/13678))
+
+- feat: add `migration-task` for impossible to migrate slots ([#13658](https://github.com/sveltejs/svelte/pull/13658))
+
+- feat: tell users of `@migration-task` ([#13668](https://github.com/sveltejs/svelte/pull/13668))
+
+- fix: correct migration of uninitialised state ([#13673](https://github.com/sveltejs/svelte/pull/13673))
+
+- fix: ensure migrate correctly handles named slots ([#13676](https://github.com/sveltejs/svelte/pull/13676))
+
+- feat: add `migration-task` comment after errors ([#13659](https://github.com/sveltejs/svelte/pull/13659))
+
+- fix: migrate reactive statements with inner blocks ([#13675](https://github.com/sveltejs/svelte/pull/13675))
+
+- fix: migrating rest props type includes props types ([#13632](https://github.com/sveltejs/svelte/pull/13632))
+
+- fix: migrated snippet shadowing prop and let directive removal ([#13679](https://github.com/sveltejs/svelte/pull/13679))
+
+- chore: CompileDiagnostic no longer extends Error ([#13651](https://github.com/sveltejs/svelte/pull/13651))
+
+- fix: reset `reset_element` in `render` to prevent runtime error ([#13669](https://github.com/sveltejs/svelte/pull/13669))
+
+## 5.0.0-next.269
+
+### Patch Changes
+
+- fix: transitions within dynamic components now function correctly ([#13646](https://github.com/sveltejs/svelte/pull/13646))
+
+- fix: use `internal_set` in `await` block ([#13642](https://github.com/sveltejs/svelte/pull/13642))
+
+- fix: correctly applies autofocus to static elements ([#13648](https://github.com/sveltejs/svelte/pull/13648))
+
+- fix: `method` attribute is case insensitive ([#13639](https://github.com/sveltejs/svelte/pull/13639))
+
+- chore: avoid reporting inspections when an exception occurs ([#13601](https://github.com/sveltejs/svelte/pull/13601))
+
+- fix: ensure legacy run utility does not cause cycles ([#13643](https://github.com/sveltejs/svelte/pull/13643))
+
+- fix: better migration for leading and trailing comments ([#13630](https://github.com/sveltejs/svelte/pull/13630))
+
 ## 5.0.0-next.268
 
 ### Patch Changes
