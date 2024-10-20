@@ -1,5 +1,17 @@
 # svelte
 
+## 5.0.2
+
+### Patch Changes
+
+- fix: don't blank css on migration error ([#13703](https://github.com/sveltejs/svelte/pull/13703))
+
+## 5.0.1
+
+### Patch Changes
+
+- fix: use typedef for JSDoc props and maintain comments ([#13698](https://github.com/sveltejs/svelte/pull/13698))
+
 ## 5.0.0
 
 A new major version of Svelte has been released! 🎉

@@ -34,6 +34,7 @@ let has_migration_task = false;
  * @returns {{ code: string; }}
  */
 export function migrate(source, { filename } = {}) {
+	let og_source = source;
 	try {
 		has_migration_task = false;
 		// Blank CSS, could contain SCSS or similar that needs a preprocessor.
@@ -213,23 +214,18 @@ export function migrate(source, { filename } = {}) {
 					}
 					type += `\n${indent}}`;
 				} else {
-					type = `{${state.props
+					type = `/**\n${indent} * @typedef {Object} ${type_name}${state.props
 						.map((prop) => {
-							return `${prop.exported}${prop.optional ? '?' : ''}: ${prop.type}`;
+							return `\n${indent} * @property {${prop.type}} ${prop.optional ? `[${prop.exported}]` : prop.exported}${prop.comment ? ` - ${prop.comment}` : ''}`;
 						})
-						.join(`, `)}`;
-					if (analysis.uses_props || analysis.uses_rest_props) {
-						type += `${state.props.length > 0 ? ', ' : ''}[key: string]: any`;
-					}
-					type += '}';
+						.join(``)}\n${indent} */`;
 				}
-
 				let props_declaration = `let {${props_separator}${props}${has_many_props ? `\n${indent}` : ' '}}`;
 				if (uses_ts) {
 					props_declaration = `${type}\n\n${indent}${props_declaration}`;
 					props_declaration = `${props_declaration}${type ? `: ${type_name}` : ''} = $props();`;
 				} else {
-					props_declaration = `/** @type {${type}} */\n${indent}${props_declaration}`;
+					props_declaration = `${type && state.props.length > 0 ? `${type}\n\n${indent}` : ''}/** @type {${state.props.length > 0 ? type_name : ''}${analysis.uses_props || analysis.uses_rest_props ? `${state.props.length > 0 ? ' & ' : ''}{ [key: string]: any }` : ''}} */\n${indent}${props_declaration}`;
 					props_declaration = `${props_declaration} = $props();`;
 				}
 
@@ -308,7 +304,7 @@ export function migrate(source, { filename } = {}) {
 		console.error('Error while migrating Svelte code', e);
 		has_migration_task = true;
 		return {
-			code: `<!-- @migration-task Error while migrating Svelte code: ${/** @type {any} */ (e).message} -->\n${source}`
+			code: `<!-- @migration-task Error while migrating Svelte code: ${/** @type {any} */ (e).message} -->\n${og_source}`
 		};
 	} finally {
 		if (has_migration_task) {
@@ -1265,11 +1261,10 @@ function extract_type_and_comment(declarator, str, path) {
 
 	// Try to find jsdoc above the declaration
 	let comment_node = /** @type {Node} */ (parent)?.leadingComments?.at(-1);
-	if (comment_node?.type !== 'Block') comment_node = undefined;
 
 	const comment_start = /** @type {any} */ (comment_node)?.start;
 	const comment_end = /** @type {any} */ (comment_node)?.end;
-	const comment = comment_node && str.original.substring(comment_start, comment_end);
+	let comment = comment_node && str.original.substring(comment_start, comment_end);
 
 	if (comment_node) {
 		str.update(comment_start, comment_end, '');
@@ -1283,11 +1278,31 @@ function extract_type_and_comment(declarator, str, path) {
 		return { type: str.original.substring(start, declarator.id.typeAnnotation.end), comment };
 	}
 
+	let cleaned_comment = comment
+		?.split('\n')
+		.map((line) =>
+			line
+				.trim()
+				// replace `// ` for one liners
+				.replace(/^\/\/\s*/g, '')
+				// replace `\**` for the initial JSDoc
+				.replace(/^\/\*\*?\s*/g, '')
+				// migrate `*/` for the end of JSDoc
+				.replace(/\s*\*\/$/g, '')
+				// remove any initial `* ` to clean the comment
+				.replace(/^\*\s*/g, '')
+		)
+		.filter(Boolean);
+	const first_at_comment = cleaned_comment?.findIndex((line) => line.startsWith('@'));
+	comment = cleaned_comment
+		?.slice(0, first_at_comment !== -1 ? first_at_comment : cleaned_comment.length)
+		.join('\n');
+
 	// try to find a comment with a type annotation, hinting at jsdoc
 	if (parent?.type === 'ExportNamedDeclaration' && comment_node) {
 		const match = /@type {(.+)}/.exec(comment_node.value);
 		if (match) {
-			return { type: match[1] };
+			return { type: match[1], comment };
 		}
 	}
 
