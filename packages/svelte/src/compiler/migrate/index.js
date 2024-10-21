@@ -25,6 +25,15 @@ const style_placeholder = '/*$$__STYLE_CONTENT__$$*/';
 
 let has_migration_task = false;
 
+class MigrationError extends Error {
+	/**
+	 * @param {string} msg
+	 */
+	constructor(msg) {
+		super(msg);
+	}
+}
+
 /**
  * Does a best-effort migration of Svelte code towards using runes, event attributes and render tags.
  * May throw an error if the code is too complex to migrate automatically.
@@ -81,6 +90,7 @@ export function migrate(source, { filename } = {}) {
 			props: [],
 			props_insertion_point: parsed.instance?.content.start ?? 0,
 			has_props_rune: false,
+			has_type_or_fallback: false,
 			end: source.length,
 			names: {
 				props: analysis.root.unique('props').name,
@@ -104,7 +114,10 @@ export function migrate(source, { filename } = {}) {
 			script_insertions: new Set(),
 			derived_components: new Map(),
 			derived_labeled_statements: new Set(),
-			has_svelte_self: false
+			has_svelte_self: false,
+			uses_ts: !!parsed.instance?.attributes.some(
+				(attr) => attr.name === 'lang' && /** @type {any} */ (attr).value[0].data === 'ts'
+			)
 		};
 
 		if (parsed.module) {
@@ -197,35 +210,41 @@ export function migrate(source, { filename } = {}) {
 				// some render tags or forwarded event attributes to add
 				str.appendRight(insertion_point, ` ${props},`);
 			} else {
-				const uses_ts = parsed.instance?.attributes.some(
-					(attr) => attr.name === 'lang' && /** @type {any} */ (attr).value[0].data === 'ts'
-				);
 				const type_name = state.scope.root.unique('Props').name;
 				let type = '';
-				if (uses_ts) {
-					type = `interface ${type_name} {${newline_separator}${state.props
-						.map((prop) => {
-							const comment = prop.comment ? `${prop.comment}${newline_separator}` : '';
-							return `${comment}${prop.exported}${prop.optional ? '?' : ''}: ${prop.type};`;
-						})
-						.join(newline_separator)}`;
-					if (analysis.uses_props || analysis.uses_rest_props) {
-						type += `${state.props.length > 0 ? newline_separator : ''}[key: string]: any`;
+
+				// Try to infer when we don't want to add types (e.g. user doesn't use types, or this is a zero-types +page.svelte)
+				if (state.has_type_or_fallback || state.props.every((prop) => prop.slot_name)) {
+					if (state.uses_ts) {
+						type = `interface ${type_name} {${newline_separator}${state.props
+							.map((prop) => {
+								const comment = prop.comment ? `${prop.comment}${newline_separator}` : '';
+								return `${comment}${prop.exported}${prop.optional ? '?' : ''}: ${prop.type};`;
+							})
+							.join(newline_separator)}`;
+						if (analysis.uses_props || analysis.uses_rest_props) {
+							type += `${state.props.length > 0 ? newline_separator : ''}[key: string]: any`;
+						}
+						type += `\n${indent}}`;
+					} else {
+						type = `/**\n${indent} * @typedef {Object} ${type_name}${state.props
+							.map((prop) => {
+								return `\n${indent} * @property {${prop.type}} ${prop.optional ? `[${prop.exported}]` : prop.exported}${prop.comment ? ` - ${prop.comment}` : ''}`;
+							})
+							.join(``)}\n${indent} */`;
 					}
-					type += `\n${indent}}`;
-				} else {
-					type = `/**\n${indent} * @typedef {Object} ${type_name}${state.props
-						.map((prop) => {
-							return `\n${indent} * @property {${prop.type}} ${prop.optional ? `[${prop.exported}]` : prop.exported}${prop.comment ? ` - ${prop.comment}` : ''}`;
-						})
-						.join(``)}\n${indent} */`;
 				}
+
 				let props_declaration = `let {${props_separator}${props}${has_many_props ? `\n${indent}` : ' '}}`;
-				if (uses_ts) {
-					props_declaration = `${type}\n\n${indent}${props_declaration}`;
+				if (state.uses_ts) {
+					if (type) {
+						props_declaration = `${type}\n\n${indent}${props_declaration}`;
+					}
 					props_declaration = `${props_declaration}${type ? `: ${type_name}` : ''} = $props();`;
 				} else {
-					props_declaration = `${type && state.props.length > 0 ? `${type}\n\n${indent}` : ''}/** @type {${state.props.length > 0 ? type_name : ''}${analysis.uses_props || analysis.uses_rest_props ? `${state.props.length > 0 ? ' & ' : ''}{ [key: string]: any }` : ''}} */\n${indent}${props_declaration}`;
+					if (type) {
+						props_declaration = `${state.props.length > 0 ? `${type}\n\n${indent}` : ''}/** @type {${state.props.length > 0 ? type_name : ''}${analysis.uses_props || analysis.uses_rest_props ? `${state.props.length > 0 ? ' & ' : ''}{ [key: string]: any }` : ''}} */\n${indent}${props_declaration}`;
+					}
 					props_declaration = `${props_declaration} = $props();`;
 				}
 
@@ -300,8 +319,10 @@ export function migrate(source, { filename } = {}) {
 		}
 		return { code: str.toString() };
 	} catch (e) {
-		// eslint-disable-next-line no-console
-		console.error('Error while migrating Svelte code', e);
+		if (!(e instanceof MigrationError)) {
+			// eslint-disable-next-line no-console
+			console.error('Error while migrating Svelte code', e);
+		}
 		has_migration_task = true;
 		return {
 			code: `<!-- @migration-task Error while migrating Svelte code: ${/** @type {any} */ (e).message} -->\n${og_source}`
@@ -326,6 +347,7 @@ export function migrate(source, { filename } = {}) {
  *  props: Array<{ local: string; exported: string; init: string; bindable: boolean; slot_name?: string; optional: boolean; type: string; comment?: string; type_only?: boolean; needs_refine_type?: boolean; }>;
  *  props_insertion_point: number;
  *  has_props_rune: boolean;
+ *  has_type_or_fallback: boolean;
  *  end: number;
  * 	names: Record<string, string>;
  * 	legacy_imports: Set<string>;
@@ -333,6 +355,7 @@ export function migrate(source, { filename } = {}) {
  *  derived_components: Map<string, string>;
  * 	derived_labeled_statements: Set<LabeledStatement>;
  *  has_svelte_self: boolean;
+ *  uses_ts: boolean;
  * }} State
  */
 
@@ -387,7 +410,7 @@ const instance_script = {
 				state.str.remove(/** @type {number} */ (node.start), /** @type {number} */ (node.end));
 			}
 			if (illegal_specifiers.length > 0) {
-				throw new Error(
+				throw new MigrationError(
 					`Can't migrate code with ${illegal_specifiers.join(' and ')}. Please migrate by hand.`
 				);
 			}
@@ -451,7 +474,7 @@ const instance_script = {
 
 				if (declarator.id.type !== 'Identifier') {
 					// TODO invest time in this?
-					throw new Error(
+					throw new MigrationError(
 						'Encountered an export declaration pattern that is not supported for automigration.'
 					);
 					// Turn export let into props. It's really really weird because export let { x: foo, z: [bar]} = ..
@@ -482,7 +505,7 @@ const instance_script = {
 				const binding = /** @type {Binding} */ (state.scope.get(name));
 
 				if (state.analysis.uses_props && (declarator.init || binding.updated)) {
-					throw new Error(
+					throw new MigrationError(
 						'$$props is used together with named props in a way that cannot be automatically migrated.'
 					);
 				}
@@ -517,7 +540,7 @@ const instance_script = {
 							: '',
 						optional: !!declarator.init,
 						bindable: binding.updated,
-						...extract_type_and_comment(declarator, state.str, path)
+						...extract_type_and_comment(declarator, state, path)
 					});
 				}
 
@@ -558,14 +581,22 @@ const instance_script = {
 						const declaration = reference.path.find((el) => el.type === 'VariableDeclaration');
 						const assignment = reference.path.find((el) => el.type === 'AssignmentExpression');
 						const update = reference.path.find((el) => el.type === 'UpdateExpression');
-						const labeled = reference.path.find(
-							(el) => el.type === 'LabeledStatement' && el.label.name === '$'
+						const labeled = /** @type {LabeledStatement | undefined} */ (
+							reference.path.find((el) => el.type === 'LabeledStatement' && el.label.name === '$')
 						);
 
-						if (assignment && labeled) {
+						if (
+							assignment &&
+							labeled &&
+							// ensure that $: foo = bar * 2 is not counted as a reassignment of bar
+							(labeled.body.type !== 'ExpressionStatement' ||
+								labeled.body.expression !== assignment ||
+								(assignment.left.type === 'Identifier' &&
+									assignment.left.name === binding.node.name))
+						) {
 							if (assignment_in_labeled) return false;
 							assignment_in_labeled = /** @type {AssignmentExpression} */ (assignment);
-							labeled_statement = /** @type {LabeledStatement} */ (labeled);
+							labeled_statement = labeled;
 						}
 
 						return (
@@ -739,7 +770,12 @@ const instance_script = {
 			);
 			const bindings = ids.map((id) => state.scope.get(id.name));
 			const reassigned_bindings = bindings.filter((b) => b?.reassigned);
-			if (reassigned_bindings.length === 0 && !bindings.some((b) => b?.kind === 'store_sub')) {
+
+			if (
+				reassigned_bindings.length === 0 &&
+				!bindings.some((b) => b?.kind === 'store_sub') &&
+				node.body.expression.left.type !== 'MemberExpression'
+			) {
 				let { start, end } = /** @type {{ start: number, end: number }} */ (
 					node.body.expression.right
 				);
@@ -1041,7 +1077,7 @@ const template = {
 		} else if (slot_name !== 'default') {
 			name = state.scope.generate(slot_name);
 			if (name !== slot_name) {
-				throw new Error(
+				throw new MigrationError(
 					'This migration would change the name of a slot making the component unusable'
 				);
 			}
@@ -1117,6 +1153,10 @@ function migrate_slot_usage(node, path, state) {
 			is_text_attribute(attribute)
 		) {
 			snippet_name = attribute.value[0].data;
+			// the default slot in svelte 4 if what the children slot is for svelte 5
+			if (snippet_name === 'default') {
+				snippet_name = 'children';
+			}
 			if (!regex_is_valid_identifier.test(snippet_name)) {
 				has_migration_task = true;
 				state.str.appendLeft(
@@ -1253,10 +1293,11 @@ function migrate_slot_usage(node, path, state) {
 
 /**
  * @param {VariableDeclarator} declarator
- * @param {MagicString} str
+ * @param {State} state
  * @param {SvelteNode[]} path
  */
-function extract_type_and_comment(declarator, str, path) {
+function extract_type_and_comment(declarator, state, path) {
+	const str = state.str;
 	const parent = path.at(-1);
 
 	// Try to find jsdoc above the declaration
@@ -1271,6 +1312,7 @@ function extract_type_and_comment(declarator, str, path) {
 	}
 
 	if (declarator.id.typeAnnotation) {
+		state.has_type_or_fallback = true;
 		let start = declarator.id.typeAnnotation.start + 1; // skip the colon
 		while (str.original[start] === ' ') {
 			start++;
@@ -1278,7 +1320,7 @@ function extract_type_and_comment(declarator, str, path) {
 		return { type: str.original.substring(start, declarator.id.typeAnnotation.end), comment };
 	}
 
-	let cleaned_comment = comment
+	let cleaned_comment_arr = comment
 		?.split('\n')
 		.map((line) =>
 			line
@@ -1293,28 +1335,30 @@ function extract_type_and_comment(declarator, str, path) {
 				.replace(/^\*\s*/g, '')
 		)
 		.filter(Boolean);
-	const first_at_comment = cleaned_comment?.findIndex((line) => line.startsWith('@'));
-	comment = cleaned_comment
-		?.slice(0, first_at_comment !== -1 ? first_at_comment : cleaned_comment.length)
+	const first_at_comment = cleaned_comment_arr?.findIndex((line) => line.startsWith('@'));
+	let cleaned_comment = cleaned_comment_arr
+		?.slice(0, first_at_comment !== -1 ? first_at_comment : cleaned_comment_arr.length)
 		.join('\n');
 
 	// try to find a comment with a type annotation, hinting at jsdoc
 	if (parent?.type === 'ExportNamedDeclaration' && comment_node) {
+		state.has_type_or_fallback = true;
 		const match = /@type {(.+)}/.exec(comment_node.value);
 		if (match) {
-			return { type: match[1], comment };
+			return { type: match[1], comment: cleaned_comment };
 		}
 	}
 
 	// try to infer it from the init
 	if (declarator.init?.type === 'Literal') {
+		state.has_type_or_fallback = true; // only assume type if it's trivial to infer - else someone would've added a type annotation
 		const type = typeof declarator.init.value;
 		if (type === 'string' || type === 'number' || type === 'boolean') {
-			return { type, comment };
+			return { type, comment: state.uses_ts ? comment : cleaned_comment };
 		}
 	}
 
-	return { type: 'any', comment };
+	return { type: 'any', comment: state.uses_ts ? comment : cleaned_comment };
 }
 
 // Ensure modifiers are applied in the same order as Svelte 4
@@ -1492,7 +1536,7 @@ function handle_identifier(node, state, path) {
 			} else if (name !== 'default') {
 				let new_name = state.scope.generate(name);
 				if (new_name !== name) {
-					throw new Error(
+					throw new MigrationError(
 						'This migration would change the name of a slot making the component unusable'
 					);
 				}
@@ -1533,6 +1577,8 @@ function handle_identifier(node, state, path) {
 			parent.type === 'TSInterfaceDeclaration' ? parent.body.body : parent.typeAnnotation?.members;
 		if (Array.isArray(members)) {
 			if (node.name === '$$Props') {
+				state.has_type_or_fallback = true;
+
 				for (const member of members) {
 					const prop = state.props.find((prop) => prop.exported === member.key.name);
 
