@@ -109,13 +109,13 @@ Type `$props` just like a regular object with certain properties.
 
 ## Generic `$props`
 
-Components can declare a generic relationship between their properties. One example is a generic list component that receives a list of items and a callback property that reveives an item from the list. To declare that the `items` property and the `select` callback operate on the same types, add the `generics` attribute to the `script` tag:
+Components can declare a generic relationship between their properties. One example is a generic list component that receives a list of items and a callback property that receives an item from the list. To declare that the `items` property and the `select` callback operate on the same types, add the `generics` attribute to the `script` tag:
 
 ```svelte
 <script lang="ts" generics="Item extends { text: string }">
 	interface Props {
 		items: Item[];
-		select: Item;
+		select(item: Item): void;
 	}
 
 	let { items, select }: Props = $props();
