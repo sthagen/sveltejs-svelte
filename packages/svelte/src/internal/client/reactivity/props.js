@@ -177,6 +177,19 @@ const spread_props_handler = {
 			if (typeof p === 'object' && p !== null && key in p) return p[key];
 		}
 	},
+	set(target, key, value) {
+		let i = target.props.length;
+		while (i--) {
+			let p = target.props[i];
+			if (is_function(p)) p = p();
+			const desc = get_descriptor(p, key);
+			if (desc && desc.set) {
+				desc.set(value);
+				return true;
+			}
+		}
+		return false;
+	},
 	getOwnPropertyDescriptor(target, key) {
 		let i = target.props.length;
 		while (i--) {
@@ -373,8 +386,6 @@ export function prop(props, key, flags, fallback) {
 	if (!immutable) current_value.equals = safe_equals;
 
 	return function (/** @type {any} */ value, /** @type {boolean} */ mutation) {
-		var current = get(current_value);
-
 		// legacy nonsense — need to ensure the source is invalidated when necessary
 		// also needed for when handling inspect logic so we can inspect the correct source signal
 		if (is_signals_recorded) {
@@ -398,12 +409,11 @@ export function prop(props, key, flags, fallback) {
 				if (fallback_used && fallback_value !== undefined) {
 					fallback_value = new_value;
 				}
-				get(current_value); // force a synchronisation immediately
+				untrack(() => get(current_value)); // force a synchronisation immediately
 			}
 
 			return value;
 		}
-
-		return current;
+		return get(current_value);
 	};
 }
