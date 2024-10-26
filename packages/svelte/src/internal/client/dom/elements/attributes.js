@@ -54,8 +54,13 @@ export function remove_input_defaults(input) {
 export function set_value(element, value) {
 	// @ts-expect-error
 	var attributes = (element.__attributes ??= {});
-	// @ts-expect-error
-	if (attributes.value === (attributes.value = value) || element.value === value) return;
+	if (
+		attributes.value === (attributes.value = value) ||
+		// @ts-expect-error
+		// `progress` elements always need their value set when its `0`
+		(element.value === value && (value !== 0 || element.nodeName !== 'PROGRESS'))
+	)
+		return;
 	// @ts-expect-error
 	element.value = value;
 }
@@ -104,6 +109,11 @@ export function set_attribute(element, attribute, value, skip_warning) {
 	}
 
 	if (attributes[attribute] === (attributes[attribute] = value)) return;
+
+	if (attribute === 'style' && '__styles' in element) {
+		// reset styles to force style: directive to update
+		element.__styles = {};
+	}
 
 	if (attribute === 'loading') {
 		// @ts-expect-error
@@ -288,6 +298,10 @@ export function set_attributes(
 					set_attribute(element, name, value);
 				}
 			}
+		}
+		if (key === 'style' && '__styles' in element) {
+			// reset styles to force style: directive to update
+			element.__styles = {};
 		}
 	}
 

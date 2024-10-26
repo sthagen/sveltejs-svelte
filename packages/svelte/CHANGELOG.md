@@ -1,5 +1,53 @@
 # svelte
 
+## 5.1.3
+
+### Patch Changes
+
+- fix: rethrow errors from await block if no catch block exists ([#13819](https://github.com/sveltejs/svelte/pull/13819))
+
+- fix: ensure SVG element attributes have case preserved ([#13935](https://github.com/sveltejs/svelte/pull/13935))
+
+- fix: ensure bind:group works as intended with proxied state objects ([#13939](https://github.com/sveltejs/svelte/pull/13939))
+
+- fix: ensure value is correctly set to zero on the progress element ([#13924](https://github.com/sveltejs/svelte/pull/13924))
+
+- fix: skip comment nodes in snippet validation logic ([#13936](https://github.com/sveltejs/svelte/pull/13936))
+
+- fix: typo in `Action` types ([#13874](https://github.com/sveltejs/svelte/pull/13874))
+
+- fix: remove metadata from legacy AST ([#13927](https://github.com/sveltejs/svelte/pull/13927))
+
+## 5.1.2
+
+### Patch Changes
+
+- fix: improve consistency of transitions ([#13895](https://github.com/sveltejs/svelte/pull/13895))
+
+- fix: enable bound store props in runes mode components ([#13887](https://github.com/sveltejs/svelte/pull/13887))
+
+- fix: ensure each block references to imports are handled correctly ([#13892](https://github.com/sveltejs/svelte/pull/13892))
+
+- fix: ensure SvelteMap reactivity persists through deriveds ([#13877](https://github.com/sveltejs/svelte/pull/13877))
+
+- fix: ensure snippets after empty text correctly hydrate ([#13870](https://github.com/sveltejs/svelte/pull/13870))
+
+- fix: prevent migration script from adding `props.` to the `export let` identifier ([#13899](https://github.com/sveltejs/svelte/pull/13899))
+
+- fix: prevent var name clashing for delegated events without params ([#13896](https://github.com/sveltejs/svelte/pull/13896))
+
+## 5.1.1
+
+### Patch Changes
+
+- fix: internally wrap store subscribe in untrack ([#13858](https://github.com/sveltejs/svelte/pull/13858))
+
+- fix: allow binding to const with spread in legacy mode ([#13849](https://github.com/sveltejs/svelte/pull/13849))
+
+- fix: ensure props internally untracks current_value on sets ([#13859](https://github.com/sveltejs/svelte/pull/13859))
+
+- fix: properly traverse children when checking matches for `:has` ([#13866](https://github.com/sveltejs/svelte/pull/13866))
+
 ## 5.1.0
 
 ### Minor Changes
