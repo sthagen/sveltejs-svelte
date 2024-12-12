@@ -1,5 +1,29 @@
 # svelte
 
+## 5.11.2
+
+### Patch Changes
+
+- fix: correctly handle ssr for `reactivity/window` ([#14681](https://github.com/sveltejs/svelte/pull/14681))
+
+## 5.11.1
+
+### Patch Changes
+
+- fix: account for global block in `is_empty` ([#14677](https://github.com/sveltejs/svelte/pull/14677))
+
+- fix: remove overzealous `reactive_declaration_non_reactive_property` warning ([#14663](https://github.com/sveltejs/svelte/pull/14663))
+
+## 5.11.0
+
+### Minor Changes
+
+- feat: add `svelte/reactivity/window` module ([#14660](https://github.com/sveltejs/svelte/pull/14660))
+
+### Patch Changes
+
+- fix: take into account registration state when setting custom element props ([#14508](https://github.com/sveltejs/svelte/pull/14508))
+
 ## 5.10.1
 
 ### Patch Changes
