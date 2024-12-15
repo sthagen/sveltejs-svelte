@@ -448,8 +448,24 @@ declare module 'svelte' {
 	}): Exports;
 	/**
 	 * Unmounts a component that was previously mounted using `mount` or `hydrate`.
+	 *
+	 * Since 5.13.0, if `options.outro` is `true`, [transitions](https://svelte.dev/docs/svelte/transition) will play before the component is removed from the DOM.
+	 *
+	 * Returns a `Promise` that resolves after transitions have completed if `options.outro` is true, or immediately otherwise (prior to 5.13.0, returns `void`).
+	 *
+	 * ```js
+	 * import { mount, unmount } from 'svelte';
+	 * import App from './App.svelte';
+	 *
+	 * const app = mount(App, { target: document.body });
+	 *
+	 * // later...
+	 * unmount(app, { outro: true });
+	 * ```
 	 * */
-	export function unmount(component: Record<string, any>): void;
+	export function unmount(component: Record<string, any>, options?: {
+		outro?: boolean;
+	} | undefined): Promise<void>;
 	/**
 	 * Returns a promise that resolves once any pending state changes have been applied.
 	 * */
@@ -632,6 +648,7 @@ declare module 'svelte/compiler' {
 	export function parse(source: string, options: {
 		filename?: string;
 		modern: true;
+		loose?: boolean;
 	}): AST.Root;
 	/**
 	 * The parse function parses a component, returning only its abstract syntax tree.
@@ -643,6 +660,7 @@ declare module 'svelte/compiler' {
 	export function parse(source: string, options?: {
 		filename?: string;
 		modern?: false;
+		loose?: boolean;
 	} | undefined): Record<string, any>;
 	/**
 	 * @deprecated Replace this with `import { walk } from 'estree-walker'`
