@@ -1,5 +1,33 @@
 # svelte
 
+## 5.17.1
+
+### Patch Changes
+
+- fix: remove bindable prop validation ([#14946](https://github.com/sveltejs/svelte/pull/14946))
+
+- chore: tweak "invalid assignment" compiler error message ([#14955](https://github.com/sveltejs/svelte/pull/14955))
+
+- fix: silence false-positive stale value warning ([#14958](https://github.com/sveltejs/svelte/pull/14958))
+
+## 5.17.0
+
+### Minor Changes
+
+- feat: allow non-numeric values to be tweened by snapping immediately to new value ([#14941](https://github.com/sveltejs/svelte/pull/14941))
+
+### Patch Changes
+
+- fix: handle default values in object destructuring within "each" blocks when using characters like "}" and "]" ([#14554](https://github.com/sveltejs/svelte/pull/14554))
+
+- fix: account for min-width/height in `slide` transition ([#14942](https://github.com/sveltejs/svelte/pull/14942))
+
+- fix: prevent long delays causing erratic spring behaviour ([#14940](https://github.com/sveltejs/svelte/pull/14940))
+
+- feat: warn on using `slide` transition with table elements ([#14936](https://github.com/sveltejs/svelte/pull/14936))
+
+- chore: improve signal performance by reducing duplicate deps ([#14945](https://github.com/sveltejs/svelte/pull/14945))
+
 ## 5.16.6
 
 ### Patch Changes
