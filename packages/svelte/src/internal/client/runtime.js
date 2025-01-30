@@ -4,7 +4,6 @@ import { define_property, get_descriptors, get_prototype_of, index_of } from '..
 import {
 	destroy_block_effect_children,
 	destroy_effect_children,
-	destroy_effect_deriveds,
 	execute_effect_teardown,
 	unlink_effect
 } from './reactivity/effects.js';
@@ -27,15 +26,21 @@ import {
 	BOUNDARY_EFFECT
 } from './constants.js';
 import { flush_tasks } from './dom/task.js';
-import { internal_set, set } from './reactivity/sources.js';
-import { destroy_derived, execute_derived, update_derived } from './reactivity/deriveds.js';
+import { internal_set } from './reactivity/sources.js';
+import {
+	destroy_derived,
+	destroy_derived_effects,
+	execute_derived,
+	update_derived
+} from './reactivity/deriveds.js';
 import * as e from './errors.js';
 import { FILENAME } from '../../constants.js';
-import { legacy_mode_flag, tracing_mode_flag } from '../flags/index.js';
+import { tracing_mode_flag } from '../flags/index.js';
 import { tracing_expressions, get_stack } from './dev/tracing.js';
 import {
 	component_context,
 	dev_current_component_function,
+	is_runes,
 	set_component_context,
 	set_dev_current_component_function
 } from './context.js';
@@ -155,11 +160,6 @@ export function set_captured_signals(value) {
 
 export function increment_write_version() {
 	return ++write_version;
-}
-
-/** @returns {boolean} */
-export function is_runes() {
-	return !legacy_mode_flag || (component_context !== null && component_context.l === null);
 }
 
 /**
@@ -409,7 +409,16 @@ export function update_reaction(reaction) {
 	skipped_deps = 0;
 	untracked_writes = null;
 	active_reaction = (flags & (BRANCH_EFFECT | ROOT_EFFECT)) === 0 ? reaction : null;
-	skip_reaction = !is_flushing_effect && (flags & UNOWNED) !== 0;
+	// prettier-ignore
+	skip_reaction =
+		(flags & UNOWNED) !== 0 &&
+		(!is_flushing_effect ||
+			// If we were previously not in a reactive context and we're reading an unowned derived
+			// that was created inside another reaction, then we don't fully know the real owner and thus
+			// we need to skip adding any reactions for this unowned
+				((previous_reaction === null || previous_untracking) &&
+				/** @type {Derived} */ (reaction).parent !== null));
+
 	derived_sources = null;
 	set_component_context(reaction.ctx);
 	untracking = false;
@@ -517,6 +526,8 @@ function remove_reaction(signal, dependency) {
 		if ((dependency.f & (UNOWNED | DISCONNECTED)) === 0) {
 			dependency.f ^= DISCONNECTED;
 		}
+		// Disconnect any reactions owned by this reaction
+		destroy_derived_effects(/** @type {Derived} **/ (dependency));
 		remove_reactions(/** @type {Derived} **/ (dependency), 0);
 	}
 }
@@ -564,7 +575,6 @@ export function update_effect(effect) {
 		} else {
 			destroy_effect_children(effect);
 		}
-		destroy_effect_deriveds(effect);
 
 		execute_effect_teardown(effect);
 		var teardown = update_reaction(effect);
@@ -934,30 +944,20 @@ export function get(signal) {
 				new_deps.push(signal);
 			}
 		}
-	}
-
-	if (
+	} else if (
 		is_derived &&
 		/** @type {Derived} */ (signal).deps === null &&
-		(active_reaction === null || untracking || (active_reaction.f & DERIVED) !== 0)
+		/** @type {Derived} */ (signal).effects === null
 	) {
 		var derived = /** @type {Derived} */ (signal);
 		var parent = derived.parent;
 
 		if (parent !== null) {
-			// Attach the derived to the nearest parent effect or derived
-			if ((parent.f & DERIVED) !== 0) {
-				var parent_derived = /** @type {Derived} */ (parent);
-
-				if (!parent_derived.children?.includes(derived)) {
-					(parent_derived.children ??= []).push(derived);
-				}
-			} else {
-				var parent_effect = /** @type {Effect} */ (parent);
-
-				if (!parent_effect.deriveds?.includes(derived)) {
-					(parent_effect.deriveds ??= []).push(derived);
-				}
+			// If the derived is owned by another derived then mark it as unowned
+			// as the derived value might have been referenced in a different context
+			// since and thus its parent might not be its true owner anymore
+			if ((parent.f & UNOWNED) === 0) {
+				derived.f ^= UNOWNED;
 			}
 		}
 	}
@@ -1092,35 +1092,6 @@ export function set_signal_status(signal, status) {
 }
 
 /**
- * @template {number | bigint} T
- * @param {Value<T>} signal
- * @param {1 | -1} [d]
- * @returns {T}
- */
-export function update(signal, d = 1) {
-	var value = get(signal);
-	var result = d === 1 ? value++ : value--;
-
-	set(signal, value);
-
-	// @ts-expect-error
-	return result;
-}
-
-/**
- * @template {number | bigint} T
- * @param {Value<T>} signal
- * @param {1 | -1} [d]
- * @returns {T}
- */
-export function update_pre(signal, d = 1) {
-	var value = get(signal);
-
-	// @ts-expect-error
-	return set(signal, d === 1 ? ++value : --value);
-}
-
-/**
  * @param {Record<string, unknown>} obj
  * @param {string[]} keys
  * @returns {Record<string, unknown>}
@@ -1210,38 +1181,4 @@ export function deep_read(value, visited = new Set()) {
 			}
 		}
 	}
-}
-
-if (DEV) {
-	/**
-	 * @param {string} rune
-	 */
-	function throw_rune_error(rune) {
-		if (!(rune in globalThis)) {
-			// TODO if people start adjusting the "this can contain runes" config through v-p-s more, adjust this message
-			/** @type {any} */
-			let value; // let's hope noone modifies this global, but belts and braces
-			Object.defineProperty(globalThis, rune, {
-				configurable: true,
-				// eslint-disable-next-line getter-return
-				get: () => {
-					if (value !== undefined) {
-						return value;
-					}
-
-					e.rune_outside_svelte(rune);
-				},
-				set: (v) => {
-					value = v;
-				}
-			});
-		}
-	}
-
-	throw_rune_error('$state');
-	throw_rune_error('$effect');
-	throw_rune_error('$derived');
-	throw_rune_error('$inspect');
-	throw_rune_error('$props');
-	throw_rune_error('$bindable');
 }
