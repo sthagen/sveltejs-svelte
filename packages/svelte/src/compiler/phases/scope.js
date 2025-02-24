@@ -57,10 +57,8 @@ export class Binding {
 	 */
 	metadata = null;
 
-	is_called = false;
 	mutated = false;
 	reassigned = false;
-	updated = false;
 
 	/**
 	 *
@@ -76,6 +74,10 @@ export class Binding {
 		this.initial = initial;
 		this.kind = kind;
 		this.declaration_kind = declaration_kind;
+	}
+
+	get updated() {
+		return this.mutated || this.reassigned;
 	}
 }
 
@@ -738,8 +740,6 @@ export function create_scopes(ast, root, allow_reactive_declarations, parent) {
 			const binding = left && scope.get(left.name);
 
 			if (binding !== null && left !== binding.node) {
-				binding.updated = true;
-
 				if (left === expression) {
 					binding.reassigned = true;
 				} else {
