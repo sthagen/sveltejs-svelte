@@ -1,5 +1,17 @@
 # svelte
 
+## 5.22.4
+
+### Patch Changes
+
+- fix: never deduplicate expressions in templates ([#15451](https://github.com/sveltejs/svelte/pull/15451))
+
+## 5.22.3
+
+### Patch Changes
+
+- fix: run effect roots in tree order ([#15446](https://github.com/sveltejs/svelte/pull/15446))
+
 ## 5.22.2
 
 ### Patch Changes
