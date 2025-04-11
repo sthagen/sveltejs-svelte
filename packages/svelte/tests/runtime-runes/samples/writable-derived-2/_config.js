@@ -1,7 +1,7 @@
 import { test } from '../../test';
 
 export default test({
-	warnings: [],
+	html: `true true`,
 
-	hasGlobal: false
+	test({ assert, target, window }) {}
 });

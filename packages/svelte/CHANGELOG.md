@@ -1,5 +1,31 @@
 # svelte
 
+## 5.26.0
+
+### Minor Changes
+
+- feat: add `css.hasGlobal` to `compile` output ([#15450](https://github.com/sveltejs/svelte/pull/15450))
+
+### Patch Changes
+
+- fix: add snippet argument validation in dev ([#15521](https://github.com/sveltejs/svelte/pull/15521))
+
+## 5.25.12
+
+### Patch Changes
+
+- fix: improve internal_set versioning mechanic ([#15724](https://github.com/sveltejs/svelte/pull/15724))
+
+- fix: don't transform reassigned state in labeled statement in `$derived` ([#15725](https://github.com/sveltejs/svelte/pull/15725))
+
+## 5.25.11
+
+### Patch Changes
+
+- fix: handle hydration mismatches in await blocks ([#15708](https://github.com/sveltejs/svelte/pull/15708))
+
+- fix: prevent ownership warnings if the fallback of a bindable is used ([#15720](https://github.com/sveltejs/svelte/pull/15720))
+
 ## 5.25.10
 
 ### Patch Changes
