@@ -1,5 +1,31 @@
 # svelte
 
+## 5.30.1
+
+### Patch Changes
+
+- fix: add `typeParams` to `SnippetBlock` for legacy parser ([#15921](https://github.com/sveltejs/svelte/pull/15921))
+
+## 5.30.0
+
+### Minor Changes
+
+- feat: allow generics on snippets ([#15915](https://github.com/sveltejs/svelte/pull/15915))
+
+## 5.29.0
+
+### Minor Changes
+
+- feat: attachments ([#15000](https://github.com/sveltejs/svelte/pull/15000))
+
+## 5.28.7
+
+### Patch Changes
+
+- fix: remove unncessary guards that require CSP privilege when removing event attributes ([#15846](https://github.com/sveltejs/svelte/pull/15846))
+
+- fix: rewrite destructuring logic to handle iterators ([#15813](https://github.com/sveltejs/svelte/pull/15813))
+
 ## 5.28.6
 
 ### Patch Changes
