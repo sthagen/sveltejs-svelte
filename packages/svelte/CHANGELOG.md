@@ -1,5 +1,29 @@
 # svelte
 
+## 5.33.10
+
+### Patch Changes
+
+- fix: use `fill: 'forwards'` on transition animations to prevent flicker ([#16035](https://github.com/sveltejs/svelte/pull/16035))
+
+## 5.33.9
+
+### Patch Changes
+
+- fix: put expressions in effects unless known to be static ([#15792](https://github.com/sveltejs/svelte/pull/15792))
+
+## 5.33.8
+
+### Patch Changes
+
+- fix: only `select_option` if `'value'` is in `next` ([#16032](https://github.com/sveltejs/svelte/pull/16032))
+
+## 5.33.7
+
+### Patch Changes
+
+- fix: `bind:value` to select with stores ([#16028](https://github.com/sveltejs/svelte/pull/16028))
+
 ## 5.33.6
 
 ### Patch Changes
