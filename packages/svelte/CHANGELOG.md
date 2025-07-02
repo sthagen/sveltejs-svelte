@@ -1,5 +1,21 @@
 # svelte
 
+## 5.35.1
+
+### Patch Changes
+
+- feat: add parent hierarchy to `__svelte_meta` objects ([#16255](https://github.com/sveltejs/svelte/pull/16255))
+
+## 5.35.0
+
+### Minor Changes
+
+- feat: add `getAbortSignal()` ([#16266](https://github.com/sveltejs/svelte/pull/16266))
+
+### Patch Changes
+
+- chore: simplify props ([#16270](https://github.com/sveltejs/svelte/pull/16270))
+
 ## 5.34.9
 
 ### Patch Changes
