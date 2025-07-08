@@ -22,11 +22,12 @@ import {
 	ROOT_EFFECT,
 	DISCONNECTED,
 	EFFECT_IS_UPDATING,
-	STALE_REACTION
+	STALE_REACTION,
+	USER_EFFECT
 } from './constants.js';
 import { flush_tasks } from './dom/task.js';
 import { internal_set, old_values } from './reactivity/sources.js';
-import { destroy_derived_effects, update_derived } from './reactivity/deriveds.js';
+import { destroy_derived_effects, execute_derived, update_derived } from './reactivity/deriveds.js';
 import * as e from './errors.js';
 
 import { tracing_mode_flag } from '../flags/index.js';
@@ -41,6 +42,7 @@ import {
 	set_dev_stack
 } from './context.js';
 import { handle_error, invoke_error_boundary } from './error-handling.js';
+import { UNINITIALIZED } from '../../constants.js';
 
 let is_flushing = false;
 
@@ -581,6 +583,8 @@ function flush_queued_effects(effects) {
 
 		if ((effect.f & (DESTROYED | INERT)) === 0) {
 			if (check_dirtiness(effect)) {
+				var wv = write_version;
+
 				update_effect(effect);
 
 				// Effects with no dependencies or teardown do not get added to the effect tree.
@@ -597,8 +601,18 @@ function flush_queued_effects(effects) {
 						effect.fn = null;
 					}
 				}
+
+				// if state is written in a user effect, abort and re-schedule, lest we run
+				// effects that should be removed as a result of the state change
+				if (write_version > wv && (effect.f & USER_EFFECT) !== 0) {
+					break;
+				}
 			}
 		}
+	}
+
+	for (; i < length; i += 1) {
+		schedule_effect(effects[i]);
 	}
 }
 
@@ -782,7 +796,7 @@ export function get(signal) {
 		}
 	}
 
-	if (is_derived) {
+	if (is_derived && !is_destroying_effect) {
 		derived = /** @type {Derived} */ (signal);
 
 		if (check_dirtiness(derived)) {
@@ -823,11 +837,46 @@ export function get(signal) {
 		}
 	}
 
-	if (is_destroying_effect && old_values.has(signal)) {
-		return old_values.get(signal);
+	if (is_destroying_effect) {
+		if (old_values.has(signal)) {
+			return old_values.get(signal);
+		}
+
+		if (is_derived) {
+			derived = /** @type {Derived} */ (signal);
+
+			var value = derived.v;
+
+			// if the derived is dirty, or depends on the values that just changed, re-execute
+			if ((derived.f & CLEAN) !== 0 || depends_on_old_values(derived)) {
+				value = execute_derived(derived);
+			}
+
+			old_values.set(derived, value);
+
+			return value;
+		}
 	}
 
 	return signal.v;
+}
+
+/** @param {Derived} derived */
+function depends_on_old_values(derived) {
+	if (derived.v === UNINITIALIZED) return true; // we don't know, so assume the worst
+	if (derived.deps === null) return false;
+
+	for (const dep of derived.deps) {
+		if (old_values.has(dep)) {
+			return true;
+		}
+
+		if ((dep.f & DERIVED) !== 0 && depends_on_old_values(/** @type {Derived} */ (dep))) {
+			return true;
+		}
+	}
+
+	return false;
 }
 
 /**

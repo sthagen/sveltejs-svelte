@@ -1,5 +1,19 @@
 # svelte
 
+## 5.35.4
+
+### Patch Changes
+
+- fix: abort and reschedule effect processing after state change in user effect ([#16280](https://github.com/sveltejs/svelte/pull/16280))
+
+## 5.35.3
+
+### Patch Changes
+
+- fix: account for mounting when `select_option` in `attribute_effect` ([#16309](https://github.com/sveltejs/svelte/pull/16309))
+
+- fix: do not proxify the value assigned to a derived ([#16302](https://github.com/sveltejs/svelte/pull/16302))
+
 ## 5.35.2
 
 ### Patch Changes
