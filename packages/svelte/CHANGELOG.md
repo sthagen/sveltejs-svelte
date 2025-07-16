@@ -1,5 +1,33 @@
 # svelte
 
+## 5.36.4
+
+### Patch Changes
+
+- fix: avoid microtask in flushSync ([#16394](https://github.com/sveltejs/svelte/pull/16394))
+
+- fix: ensure compiler state is reset before compilation ([#16396](https://github.com/sveltejs/svelte/pull/16396))
+
+## 5.36.3
+
+### Patch Changes
+
+- fix: don't log `await_reactivity_loss` warning when signal is read in `untrack` ([#16385](https://github.com/sveltejs/svelte/pull/16385))
+
+- fix: better handle $inspect on array mutations ([#16389](https://github.com/sveltejs/svelte/pull/16389))
+
+- fix: leave proxied array `length` untouched when deleting properties ([#16389](https://github.com/sveltejs/svelte/pull/16389))
+
+- fix: update `$effect.pending()` immediately after a batch is removed ([#16382](https://github.com/sveltejs/svelte/pull/16382))
+
+## 5.36.2
+
+### Patch Changes
+
+- fix: add `$effect.pending()` to types ([#16376](https://github.com/sveltejs/svelte/pull/16376))
+
+- fix: add `pending` snippet to `<svelte:boundary>` types ([#16379](https://github.com/sveltejs/svelte/pull/16379))
+
 ## 5.36.1
 
 ### Patch Changes

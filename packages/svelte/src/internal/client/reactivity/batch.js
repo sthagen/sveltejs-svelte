@@ -49,6 +49,9 @@ export let batch_deriveds = null;
 /** @type {Effect[]} Stack of effects, dev only */
 export let dev_effect_stack = [];
 
+/** @type {Set<() => void>} */
+export let effect_pending_updates = new Set();
+
 /** @type {Effect[]} */
 let queued_root_effects = [];
 
@@ -296,6 +299,16 @@ export class Batch {
 
 	deactivate() {
 		current_batch = null;
+
+		for (const update of effect_pending_updates) {
+			effect_pending_updates.delete(update);
+			update();
+
+			if (current_batch !== null) {
+				// only do one at a time
+				break;
+			}
+		}
 	}
 
 	neuter() {
@@ -319,7 +332,7 @@ export class Batch {
 			batches.delete(this);
 		}
 
-		current_batch = null;
+		this.deactivate();
 	}
 
 	flush_effects() {
@@ -389,6 +402,8 @@ export class Batch {
 			this.#effects = [];
 
 			this.flush();
+		} else {
+			this.deactivate();
 		}
 	}
 
@@ -401,19 +416,21 @@ export class Batch {
 		return (this.#deferred ??= deferred()).promise;
 	}
 
-	static ensure() {
+	static ensure(autoflush = true) {
 		if (current_batch === null) {
 			const batch = (current_batch = new Batch());
 			batches.add(current_batch);
 
-			queueMicrotask(() => {
-				if (current_batch !== batch) {
-					// a flushSync happened in the meantime
-					return;
-				}
+			if (autoflush) {
+				queueMicrotask(() => {
+					if (current_batch !== batch) {
+						// a flushSync happened in the meantime
+						return;
+					}
 
-				batch.flush();
-			});
+					batch.flush();
+				});
+			}
 		}
 
 		return current_batch;
@@ -434,7 +451,7 @@ export function flushSync(fn) {
 
 	var result;
 
-	const batch = Batch.ensure();
+	const batch = Batch.ensure(false);
 
 	if (fn) {
 		batch.flush_effects();
