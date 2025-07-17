@@ -214,12 +214,12 @@ export function effect_pending_outside_reaction() {
 }
 
 /**
- * Maximum update depth exceeded. This can happen when a reactive block or effect repeatedly sets a new value. Svelte limits the number of nested updates to prevent infinite loops
+ * Maximum update depth exceeded. This typically indicates that an effect reads and writes the same piece of state
  * @returns {never}
  */
 export function effect_update_depth_exceeded() {
 	if (DEV) {
-		const error = new Error(`effect_update_depth_exceeded\nMaximum update depth exceeded. This can happen when a reactive block or effect repeatedly sets a new value. Svelte limits the number of nested updates to prevent infinite loops\nhttps://svelte.dev/e/effect_update_depth_exceeded`);
+		const error = new Error(`effect_update_depth_exceeded\nMaximum update depth exceeded. This typically indicates that an effect reads and writes the same piece of state\nhttps://svelte.dev/e/effect_update_depth_exceeded`);
 
 		error.name = 'Svelte error';
 
@@ -422,5 +422,21 @@ export function state_unsafe_mutation() {
 		throw error;
 	} else {
 		throw new Error(`https://svelte.dev/e/state_unsafe_mutation`);
+	}
+}
+
+/**
+ * A `<svelte:boundary>` `reset` function cannot be called while an error is still being handled
+ * @returns {never}
+ */
+export function svelte_boundary_reset_onerror() {
+	if (DEV) {
+		const error = new Error(`svelte_boundary_reset_onerror\nA \`<svelte:boundary>\` \`reset\` function cannot be called while an error is still being handled\nhttps://svelte.dev/e/svelte_boundary_reset_onerror`);
+
+		error.name = 'Svelte error';
+
+		throw error;
+	} else {
+		throw new Error(`https://svelte.dev/e/svelte_boundary_reset_onerror`);
 	}
 }
