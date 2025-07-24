@@ -1,5 +1,19 @@
 # svelte
 
+## 5.36.16
+
+### Patch Changes
+
+- fix: don't update a focused input with values from its own past ([#16491](https://github.com/sveltejs/svelte/pull/16491))
+
+- fix: don't destroy effect roots created inside of deriveds ([#16492](https://github.com/sveltejs/svelte/pull/16492))
+
+## 5.36.15
+
+### Patch Changes
+
+- fix: preserve dirty status of deferred effects ([#16487](https://github.com/sveltejs/svelte/pull/16487))
+
 ## 5.36.14
 
 ### Patch Changes
