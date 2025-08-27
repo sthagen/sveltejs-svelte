@@ -1,5 +1,17 @@
 # svelte
 
+## 5.38.6
+
+### Patch Changes
+
+- fix: don't fail on `flushSync` while flushing effects ([#16674](https://github.com/sveltejs/svelte/pull/16674))
+
+## 5.38.5
+
+### Patch Changes
+
+- fix: ensure async deriveds always get dependencies from thennable ([#16672](https://github.com/sveltejs/svelte/pull/16672))
+
 ## 5.38.4
 
 ### Patch Changes
