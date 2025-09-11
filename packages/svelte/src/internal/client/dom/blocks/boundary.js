@@ -23,7 +23,7 @@ import { queue_micro_task } from '../task.js';
 import * as e from '../../errors.js';
 import * as w from '../../warnings.js';
 import { DEV } from 'esm-env';
-import { Batch, effect_pending_updates } from '../../reactivity/batch.js';
+import { Batch, current_batch, effect_pending_updates } from '../../reactivity/batch.js';
 import { internal_set, source } from '../../reactivity/sources.js';
 import { tag } from '../../dev/tracing.js';
 import { createSubscriber } from '../../../../reactivity/create-subscriber.js';
@@ -285,6 +285,12 @@ export class Boundary {
 		var onerror = this.#props.onerror;
 		let failed = this.#props.failed;
 
+		// If we have nothing to capture the error, or if we hit an error while
+		// rendering the fallback, re-throw for another boundary to handle
+		if (this.#is_creating_fallback || (!onerror && !failed)) {
+			throw error;
+		}
+
 		if (this.#main_effect) {
 			destroy_effect(this.#main_effect);
 			this.#main_effect = null;
@@ -345,12 +351,6 @@ export class Boundary {
 				this.#pending = false;
 			}
 		};
-
-		// If we have nothing to capture the error, or if we hit an error while
-		// rendering the fallback, re-throw for another boundary to handle
-		if (this.#is_creating_fallback || (!onerror && !failed)) {
-			throw error;
-		}
 
 		var previous_reaction = active_reaction;
 
