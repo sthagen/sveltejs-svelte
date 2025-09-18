@@ -1,6 +1,7 @@
-/** @import { ComponentType, SvelteComponent } from 'svelte' */
-/** @import { Component, RenderOutput } from '#server' */
+/** @import { ComponentType, SvelteComponent, Component } from 'svelte' */
+/** @import { RenderOutput } from '#server' */
 /** @import { Store } from '#shared' */
+/** @import { AccumulatedContent } from './renderer.js' */
 export { FILENAME, HMR } from '../../constants.js';
 import { attr, clsx, to_class, to_style } from '../shared/attributes.js';
 import { is_promise, noop } from '../shared/utils.js';
@@ -13,13 +14,10 @@ import {
 } from '../../constants.js';
 import { escape_html } from '../../escaping.js';
 import { DEV } from 'esm-env';
-import { current_component, pop, push } from './context.js';
 import { EMPTY_COMMENT, BLOCK_CLOSE, BLOCK_OPEN, BLOCK_OPEN_ELSE } from './hydration.js';
 import { validate_store } from '../shared/validate.js';
 import { is_boolean_attribute, is_raw_text_element, is_void } from '../../utils.js';
-import { reset_elements } from './dev.js';
-import { Payload } from './payload.js';
-import { abort } from './abort-signal.js';
+import { Renderer } from './renderer.js';
 
 // https://html.spec.whatwg.org/multipage/syntax.html#attributes-2
 // https://infra.spec.whatwg.org/#noncharacter
@@ -27,138 +25,84 @@ const INVALID_ATTR_NAME_CHAR_REGEX =
 	/[\s'">/=\u{FDD0}-\u{FDEF}\u{FFFE}\u{FFFF}\u{1FFFE}\u{1FFFF}\u{2FFFE}\u{2FFFF}\u{3FFFE}\u{3FFFF}\u{4FFFE}\u{4FFFF}\u{5FFFE}\u{5FFFF}\u{6FFFE}\u{6FFFF}\u{7FFFE}\u{7FFFF}\u{8FFFE}\u{8FFFF}\u{9FFFE}\u{9FFFF}\u{AFFFE}\u{AFFFF}\u{BFFFE}\u{BFFFF}\u{CFFFE}\u{CFFFF}\u{DFFFE}\u{DFFFF}\u{EFFFE}\u{EFFFF}\u{FFFFE}\u{FFFFF}\u{10FFFE}\u{10FFFF}]/u;
 
 /**
- * @param {Payload} payload
+ * @param {Renderer} renderer
  * @param {string} tag
  * @param {() => void} attributes_fn
  * @param {() => void} children_fn
  * @returns {void}
  */
-export function element(payload, tag, attributes_fn = noop, children_fn = noop) {
-	payload.out.push('<!---->');
+export function element(renderer, tag, attributes_fn = noop, children_fn = noop) {
+	renderer.push('<!---->');
 
 	if (tag) {
-		payload.out.push(`<${tag}`);
+		renderer.push(`<${tag}`);
 		attributes_fn();
-		payload.out.push(`>`);
+		renderer.push(`>`);
 
 		if (!is_void(tag)) {
 			children_fn();
 			if (!is_raw_text_element(tag)) {
-				payload.out.push(EMPTY_COMMENT);
+				renderer.push(EMPTY_COMMENT);
 			}
-			payload.out.push(`</${tag}>`);
+			renderer.push(`</${tag}>`);
 		}
 	}
 
-	payload.out.push('<!---->');
+	renderer.push('<!---->');
 }
-
-/**
- * Array of `onDestroy` callbacks that should be called at the end of the server render function
- * @type {Function[]}
- */
-export let on_destroy = [];
 
 /**
  * Only available on the server and when compiling with the `server` option.
  * Takes a component and returns an object with `body` and `head` properties on it, which you can use to populate the HTML when server-rendering your app.
  * @template {Record<string, any>} Props
- * @param {import('svelte').Component<Props> | ComponentType<SvelteComponent<Props>>} component
+ * @param {Component<Props> | ComponentType<SvelteComponent<Props>>} component
  * @param {{ props?: Omit<Props, '$$slots' | '$$events'>; context?: Map<any, any>; idPrefix?: string }} [options]
  * @returns {RenderOutput}
  */
 export function render(component, options = {}) {
-	try {
-		const payload = new Payload(options.idPrefix ? options.idPrefix + '-' : '');
-
-		const prev_on_destroy = on_destroy;
-		on_destroy = [];
-		payload.out.push(BLOCK_OPEN);
-
-		let reset_reset_element;
-
-		if (DEV) {
-			// prevent parent/child element state being corrupted by a bad render
-			reset_reset_element = reset_elements();
-		}
-
-		if (options.context) {
-			push();
-			/** @type {Component} */ (current_component).c = options.context;
-		}
-
-		// @ts-expect-error
-		component(payload, options.props ?? {}, {}, {});
-
-		if (options.context) {
-			pop();
-		}
-
-		if (reset_reset_element) {
-			reset_reset_element();
-		}
-
-		payload.out.push(BLOCK_CLOSE);
-		for (const cleanup of on_destroy) cleanup();
-		on_destroy = prev_on_destroy;
-
-		let head = payload.head.out.join('') + payload.head.title;
-
-		for (const { hash, code } of payload.css) {
-			head += `<style id="${hash}">${code}</style>`;
-		}
-
-		const body = payload.out.join('');
-
-		return {
-			head,
-			html: body,
-			body: body
-		};
-	} finally {
-		abort();
-	}
+	return Renderer.render(/** @type {Component<Props>} */ (component), options);
 }
 
 /**
- * @param {Payload} payload
- * @param {(head_payload: Payload['head']) => void} fn
+ * @param {Renderer} renderer
+ * @param {(renderer: Renderer) => Promise<void> | void} fn
  * @returns {void}
  */
-export function head(payload, fn) {
-	const head_payload = payload.head;
-	head_payload.out.push(BLOCK_OPEN);
-	fn(head_payload);
-	head_payload.out.push(BLOCK_CLOSE);
+export function head(renderer, fn) {
+	renderer.head((renderer) => {
+		renderer.push(BLOCK_OPEN);
+		renderer.child(fn);
+		renderer.push(BLOCK_CLOSE);
+	});
 }
 
 /**
- * @param {Payload} payload
+ * @param {Renderer} renderer
  * @param {boolean} is_html
  * @param {Record<string, string>} props
  * @param {() => void} component
  * @param {boolean} dynamic
  * @returns {void}
  */
-export function css_props(payload, is_html, props, component, dynamic = false) {
+export function css_props(renderer, is_html, props, component, dynamic = false) {
 	const styles = style_object_to_string(props);
 
 	if (is_html) {
-		payload.out.push(`<svelte-css-wrapper style="display: contents; ${styles}">`);
+		renderer.push(`<svelte-css-wrapper style="display: contents; ${styles}">`);
 	} else {
-		payload.out.push(`<g style="${styles}">`);
+		renderer.push(`<g style="${styles}">`);
 	}
 
 	if (dynamic) {
-		payload.out.push('<!---->');
+		renderer.push('<!---->');
 	}
 
 	component();
 
 	if (is_html) {
-		payload.out.push(`<!----></svelte-css-wrapper>`);
+		renderer.push(`<!----></svelte-css-wrapper>`);
 	} else {
-		payload.out.push(`<!----></g>`);
+		renderer.push(`<!----></g>`);
 	}
 }
 
@@ -360,14 +304,14 @@ export function unsubscribe_stores(store_values) {
 }
 
 /**
- * @param {Payload} payload
+ * @param {Renderer} renderer
  * @param {Record<string, any>} $$props
  * @param {string} name
  * @param {Record<string, unknown>} slot_props
  * @param {null | (() => void)} fallback_fn
  * @returns {void}
  */
-export function slot(payload, $$props, name, slot_props, fallback_fn) {
+export function slot(renderer, $$props, name, slot_props, fallback_fn) {
 	var slot_fn = $$props.$$slots?.[name];
 	// Interop: Can use snippets to fill slots
 	if (slot_fn === true) {
@@ -375,7 +319,7 @@ export function slot(payload, $$props, name, slot_props, fallback_fn) {
 	}
 
 	if (slot_fn !== undefined) {
-		slot_fn(payload, slot_props);
+		slot_fn(renderer, slot_props);
 	} else {
 		fallback_fn?.();
 	}
@@ -443,21 +387,21 @@ export function bind_props(props_parent, props_now) {
 
 /**
  * @template V
- * @param {Payload} payload
+ * @param {Renderer} renderer
  * @param {Promise<V>} promise
  * @param {null | (() => void)} pending_fn
  * @param {(value: V) => void} then_fn
  * @returns {void}
  */
-function await_block(payload, promise, pending_fn, then_fn) {
+function await_block(renderer, promise, pending_fn, then_fn) {
 	if (is_promise(promise)) {
-		payload.out.push(BLOCK_OPEN);
+		renderer.push(BLOCK_OPEN);
 		promise.then(null, noop);
 		if (pending_fn !== null) {
 			pending_fn();
 		}
 	} else if (then_fn !== null) {
-		payload.out.push(BLOCK_OPEN_ELSE);
+		renderer.push(BLOCK_OPEN_ELSE);
 		then_fn(promise);
 	}
 }
@@ -499,12 +443,12 @@ export function once(get_value) {
 
 /**
  * Create an unique ID
- * @param {Payload} payload
+ * @param {Renderer} renderer
  * @returns {string}
  */
-export function props_id(payload) {
-	const uid = payload.uid();
-	payload.out.push('<!--#' + uid + '-->');
+export function props_id(renderer) {
+	const uid = renderer.global.uid();
+	renderer.push('<!--#' + uid + '-->');
 	return uid;
 }
 
@@ -512,11 +456,9 @@ export { attr, clsx };
 
 export { html } from './blocks/html.js';
 
-export { push, pop } from './context.js';
+export { save } from './context.js';
 
 export { push_element, pop_element, validate_snippet_args } from './dev.js';
-
-export { assign_payload, copy_payload } from './payload.js';
 
 export { snapshot } from '../shared/clone.js';
 
@@ -530,8 +472,6 @@ export {
 } from '../shared/validate.js';
 
 export { escape_html as escape };
-
-export { await_outside_boundary } from '../shared/errors.js';
 
 /**
  * @template T
@@ -556,30 +496,118 @@ export function derived(fn) {
 
 /**
  *
- * @param {Payload} payload
- * @param {*} value
+ * @param {Renderer} renderer
+ * @param {unknown} value
  */
-export function maybe_selected(payload, value) {
-	return value === payload.select_value ? ' selected' : '';
+export function maybe_selected(renderer, value) {
+	return value === renderer.local.select_value ? ' selected' : '';
 }
 
 /**
- * @param {Payload} payload
- * @param {() => void} children
+ * When an `option` element has no `value` attribute, we need to treat the child
+ * content as its `value` to determine whether we should apply the `selected` attribute.
+ * This has to be done at runtime, for hopefully obvious reasons. It is also complicated,
+ * for sad reasons.
+ * @param {Renderer} renderer
+ * @param {((renderer: Renderer) => void | Promise<void>)} children
  * @returns {void}
  */
-export function valueless_option(payload, children) {
-	var i = payload.out.length;
+export function valueless_option(renderer, children) {
+	const i = renderer.length;
 
-	children();
+	// prior to children, `renderer` has some combination of string/unresolved renderer that ends in `<option ...>`
+	renderer.child(children);
 
-	var body = payload.out.slice(i).join('');
+	// post-children, `renderer` has child content, possibly also with some number of hydration comments.
+	// we can compact this last chunk of content to see if it matches the select value...
+	renderer.compact({
+		start: i,
+		fn: (content) => {
+			if (content.body.replace(/<!---->/g, '') === renderer.local.select_value) {
+				// ...and if it does match the select value, we can compact the part of the renderer representing the `<option ...>`
+				// to add the `selected` attribute to the end.
+				renderer.compact({
+					start: i - 1,
+					end: i,
+					fn: (content) => {
+						return { body: content.body.slice(0, -1) + ' selected>', head: content.head };
+					}
+				});
+			}
+			return content;
+		}
+	});
+}
 
-	if (body.replace(/<!---->/g, '') === payload.select_value) {
-		// replace '>' with ' selected>' (closing tag will be added later)
-		var last_item = payload.out[i - 1];
-		payload.out[i - 1] = last_item.slice(0, -1) + ' selected>';
-		// Remove the old items after position i and add the body as a single item
-		payload.out.splice(i, payload.out.length - i, body);
-	}
+/**
+ * In the special case where an `option` element has no `value` attribute but
+ * the children of the `option` element are a single expression, we can simplify
+ * by running the children and passing the resulting value, which means
+ * we don't have to do all of the same parsing nonsense. It also means we can avoid
+ * coercing everything to a string.
+ * @param {Renderer} renderer
+ * @param {(() => unknown)} child
+ */
+export function simple_valueless_option(renderer, child) {
+	const result = child();
+
+	/**
+	 * @param {AccumulatedContent} content
+	 * @param {unknown} child_value
+	 * @returns {AccumulatedContent}
+	 */
+	const mark_selected = (content, child_value) => {
+		if (child_value === renderer.local.select_value) {
+			return { body: content.body.slice(0, -1) + ' selected>', head: content.head };
+		}
+		return content;
+	};
+
+	renderer.compact({
+		start: renderer.length - 1,
+		fn: (content) => {
+			if (result instanceof Promise) {
+				return result.then((child_value) => mark_selected(content, child_value));
+			}
+			return mark_selected(content, result);
+		}
+	});
+
+	renderer.child((child_renderer) => {
+		if (result instanceof Promise) {
+			return result.then((child_value) => {
+				child_renderer.push(escape_html(child_value));
+			});
+		}
+		child_renderer.push(escape_html(result));
+	});
+}
+
+/**
+ * Since your document can only have one `title`, we have to have some sort of algorithm for determining
+ * which one "wins". To do this, we perform a depth-first comparison of where the title was encountered --
+ * later ones "win" over earlier ones, regardless of what order the promises resolve in. To accomodate this, we:
+ * - Figure out where we are in the content tree (`get_path`)
+ * - Render the title in its own child so that it has a defined "slot" in the renderer
+ * - Compact that spot so that we get the entire rendered contents of the title
+ * - Attempt to set the global title (this is where the "wins" logic based on the path happens)
+ *
+ * TODO we could optimize this by not even rendering the title if the path wouldn't be accepted
+ *
+ * @param {Renderer} renderer
+ * @param {((renderer: Renderer) => void | Promise<void>)} children
+ */
+export function build_title(renderer, children) {
+	const path = renderer.get_path();
+	const i = renderer.length;
+	renderer.child(children);
+	renderer.compact({
+		start: i,
+		fn: ({ head }) => {
+			renderer.global.set_title(head, path);
+			// since we can only ever render the title in this chunk, and title rendering is handled specially,
+			// we can just ditch the results after we've saved them globally
+			return { head: '', body: '' };
+		}
+	});
 }
