@@ -68,6 +68,7 @@ export let previous_batch = null;
  */
 export let batch_values = null;
 
+// TODO this should really be a property of `batch`
 /** @type {Effect[]} */
 let queued_root_effects = [];
 
@@ -171,6 +172,8 @@ export class Batch {
 
 		for (const root of root_effects) {
 			this.#traverse_effect_tree(root, target);
+			// Note: #traverse_effect_tree runs block effects eagerly, which can schedule effects,
+			// which means queued_root_effects now may be filled again.
 		}
 
 		if (!this.is_fork) {
@@ -418,6 +421,10 @@ export class Batch {
 				// Re-run async/block effects that depend on distinct values changed in both batches
 				const others = [...batch.current.keys()].filter((s) => !this.current.has(s));
 				if (others.length > 0) {
+					// Avoid running queued root effects on the wrong branch
+					var prev_queued_root_effects = queued_root_effects;
+					queued_root_effects = [];
+
 					/** @type {Set<Value>} */
 					const marked = new Set();
 					/** @type {Map<Reaction, boolean>} */
@@ -436,9 +443,10 @@ export class Batch {
 
 						// TODO do we need to do anything with `target`? defer block effects?
 
-						queued_root_effects = [];
 						batch.deactivate();
 					}
+
+					queued_root_effects = prev_queued_root_effects;
 				}
 			}
 
@@ -600,6 +608,8 @@ function flush_effects() {
 	var was_updating_effect = is_updating_effect;
 	is_flushing = true;
 
+	var source_stacks = DEV ? new Set() : null;
+
 	try {
 		var flush_count = 0;
 		set_is_updating_effect(true);
@@ -625,8 +635,10 @@ function flush_effects() {
 					}
 
 					for (const update of updates.values()) {
-						// eslint-disable-next-line no-console
-						console.error(update.error);
+						if (update.error) {
+							// eslint-disable-next-line no-console
+							console.error(update.error);
+						}
 					}
 				}
 
@@ -635,12 +647,24 @@ function flush_effects() {
 
 			batch.process(queued_root_effects);
 			old_values.clear();
+
+			if (DEV) {
+				for (const source of batch.current.keys()) {
+					/** @type {Set<Source>} */ (source_stacks).add(source);
+				}
+			}
 		}
 	} finally {
 		is_flushing = false;
 		set_is_updating_effect(was_updating_effect);
 
 		last_scheduled_effect = null;
+
+		if (DEV) {
+			for (const source of /** @type {Set<Source>} */ (source_stacks)) {
+				source.updated = null;
+			}
+		}
 	}
 }
 
