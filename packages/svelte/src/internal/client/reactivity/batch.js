@@ -17,7 +17,8 @@ import {
 	EAGER_EFFECT,
 	HEAD_EFFECT,
 	ERROR_VALUE,
-	WAS_MARKED
+	WAS_MARKED,
+	MANAGED_EFFECT
 } from '#client/constants';
 import { async_mode_flag } from '../../flags/index.js';
 import { deferred, define_property } from '../../shared/utils.js';
@@ -234,7 +235,7 @@ export class Batch {
 					effect.f ^= CLEAN;
 				} else if ((flags & EFFECT) !== 0) {
 					target.effects.push(effect);
-				} else if (async_mode_flag && (flags & RENDER_EFFECT) !== 0) {
+				} else if (async_mode_flag && (flags & (RENDER_EFFECT | MANAGED_EFFECT)) !== 0) {
 					target.render_effects.push(effect);
 				} else if (is_dirty(effect)) {
 					if ((effect.f & BLOCK_EFFECT) !== 0) target.block_effects.push(effect);
@@ -562,11 +563,6 @@ export class Batch {
  * @returns {T}
  */
 export function flushSync(fn) {
-	if (async_mode_flag && active_effect !== null) {
-		// We disallow this because it creates super-hard to reason about stack trace and because it's generally a bad idea
-		e.flush_sync_in_effect();
-	}
-
 	var was_flushing_sync = is_flushing_sync;
 	is_flushing_sync = true;
 
@@ -779,7 +775,7 @@ function mark_effects(value, sources, marked, checked) {
 				mark_effects(/** @type {Derived} */ (reaction), sources, marked, checked);
 			} else if (
 				(flags & (ASYNC | BLOCK_EFFECT)) !== 0 &&
-				(flags & DIRTY) === 0 && // we may have scheduled this one already
+				(flags & DIRTY) === 0 &&
 				depends_on(reaction, sources, checked)
 			) {
 				set_signal_status(reaction, DIRTY);
@@ -958,11 +954,14 @@ export function fork(fn) {
 
 	var batch = Batch.ensure();
 	batch.is_fork = true;
+	batch_values = new Map();
 
 	var committed = false;
 	var settled = batch.settled();
 
 	flushSync(fn);
+
+	batch_values = null;
 
 	// revert state changes
 	for (var [source, value] of batch.previous) {
