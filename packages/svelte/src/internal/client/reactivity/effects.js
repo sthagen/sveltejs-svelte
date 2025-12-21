@@ -548,7 +548,7 @@ export function destroy_effect(effect, remove_dom = true) {
 export function remove_effect_dom(node, end) {
 	while (node !== null) {
 		/** @type {TemplateNode | null} */
-		var next = node === end ? null : /** @type {TemplateNode} */ (get_next_sibling(node));
+		var next = node === end ? null : get_next_sibling(node);
 
 		node.remove();
 		node = next;
@@ -590,17 +590,11 @@ export function pause_effect(effect, callback, destroy = true) {
 
 	pause_children(effect, transitions, true);
 
-	run_out_transitions(transitions, () => {
+	var fn = () => {
 		if (destroy) destroy_effect(effect);
 		if (callback) callback();
-	});
-}
+	};
 
-/**
- * @param {TransitionManager[]} transitions
- * @param {() => void} fn
- */
-export function run_out_transitions(transitions, fn) {
 	var remaining = transitions.length;
 	if (remaining > 0) {
 		var check = () => --remaining || fn();
@@ -617,7 +611,7 @@ export function run_out_transitions(transitions, fn) {
  * @param {TransitionManager[]} transitions
  * @param {boolean} local
  */
-export function pause_children(effect, transitions, local) {
+function pause_children(effect, transitions, local) {
 	if ((effect.f & INERT) !== 0) return;
 	effect.f ^= INERT;
 
@@ -715,7 +709,7 @@ export function move_effect(effect, fragment) {
 
 	while (node !== null) {
 		/** @type {TemplateNode | null} */
-		var next = node === end ? null : /** @type {TemplateNode} */ (get_next_sibling(node));
+		var next = node === end ? null : get_next_sibling(node);
 
 		fragment.append(node);
 		node = next;
