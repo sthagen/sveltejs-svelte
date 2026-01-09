@@ -3,21 +3,17 @@
 import { DEV } from 'esm-env';
 import {
 	ERROR_VALUE,
-	CLEAN,
 	DERIVED,
 	DIRTY,
 	EFFECT_PRESERVED,
-	MAYBE_DIRTY,
 	STALE_REACTION,
 	ASYNC,
 	WAS_MARKED,
-	CONNECTED,
 	DESTROYED
 } from '#client/constants';
 import {
 	active_reaction,
 	active_effect,
-	set_signal_status,
 	update_reaction,
 	increment_write_version,
 	set_active_effect,
@@ -37,6 +33,7 @@ import { UNINITIALIZED } from '../../../constants.js';
 import { batch_values, current_batch } from './batch.js';
 import { unset_context } from './async.js';
 import { deferred } from '../../shared/utils.js';
+import { update_derived_status } from './status.js';
 
 /** @type {Effect | null} */
 export let current_async_effect = null;
@@ -150,7 +147,7 @@ export function async_derived(fn, label, location) {
 		var batch = /** @type {Batch} */ (current_batch);
 
 		if (should_suspend) {
-			var blocking = !boundary.is_pending();
+			var blocking = boundary.is_rendered();
 
 			boundary.update_pending_count(1);
 			batch.increment(blocking);
@@ -385,7 +382,6 @@ export function update_derived(derived) {
 			batch_values.set(derived, value);
 		}
 	} else {
-		var status = (derived.f & CONNECTED) === 0 ? MAYBE_DIRTY : CLEAN;
-		set_signal_status(derived, status);
+		update_derived_status(derived);
 	}
 }
