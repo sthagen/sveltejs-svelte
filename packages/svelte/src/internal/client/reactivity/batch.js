@@ -171,6 +171,10 @@ export class Batch {
 		if (this.is_deferred()) {
 			this.#defer_effects(render_effects);
 			this.#defer_effects(effects);
+
+			for (const e of this.skipped_effects) {
+				reset_branch(e);
+			}
 		} else {
 			// append/remove branches
 			for (const fn of this.#commit_callbacks) fn();
@@ -882,6 +886,26 @@ export function eager(fn) {
 }
 
 /**
+ * Mark all the effects inside a skipped branch CLEAN, so that
+ * they can be correctly rescheduled later
+ * @param {Effect} effect
+ */
+function reset_branch(effect) {
+	// clean branch = nothing dirty inside, no need to traverse further
+	if ((effect.f & BRANCH_EFFECT) !== 0 && (effect.f & CLEAN) !== 0) {
+		return;
+	}
+
+	set_signal_status(effect, CLEAN);
+
+	var e = effect.first;
+	while (e !== null) {
+		reset_branch(e);
+		e = e.next;
+	}
+}
+
+/**
  * Creates a 'fork', in which state changes are evaluated but not applied to the DOM.
  * This is useful for speculatively loading data (for example) when you suspect that
  * the user is about to take some action.
@@ -972,6 +996,13 @@ export function fork(fn) {
 			await settled;
 		},
 		discard: () => {
+			// cause any MAYBE_DIRTY deriveds to update
+			// if they depend on things thath changed
+			// inside the discarded fork
+			for (var source of batch.current.keys()) {
+				source.wv = increment_write_version();
+			}
+
 			if (!committed && batches.has(batch)) {
 				batches.delete(batch);
 				batch.discard();
