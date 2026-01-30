@@ -1,5 +1,6 @@
 import { test } from '../../test';
 
 export default test({
-	production: true
+	mode: ['async-server', 'hydrate'],
+	error: 'oops'
 });
