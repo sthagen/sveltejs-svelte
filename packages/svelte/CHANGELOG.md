@@ -1,5 +1,33 @@
 # svelte
 
+## 5.53.0
+
+### Minor Changes
+
+- feat: allow comments in tags ([#17671](https://github.com/sveltejs/svelte/pull/17671))
+
+- feat: allow error boundaries to work on the server ([#17672](https://github.com/sveltejs/svelte/pull/17672))
+
+### Patch Changes
+
+- fix: use TrustedHTML to test for customizable `<select>` support, where necessary ([#17743](https://github.com/sveltejs/svelte/pull/17743))
+
+- fix: ensure head effects are kept in the effect tree ([#17746](https://github.com/sveltejs/svelte/pull/17746))
+
+- chore: deactivate current_batch by default in unset_context ([#17738](https://github.com/sveltejs/svelte/pull/17738))
+
+## 5.52.0
+
+### Minor Changes
+
+- feat: support TrustedHTML in `{@html}` expressions ([#17701](https://github.com/sveltejs/svelte/pull/17701))
+
+### Patch Changes
+
+- fix: repair dynamic component truthy/falsy hydration mismatches ([#17737](https://github.com/sveltejs/svelte/pull/17737))
+
+- fix: re-run non-render-bound deriveds on the server ([#17674](https://github.com/sveltejs/svelte/pull/17674))
+
 ## 5.51.5
 
 ### Patch Changes

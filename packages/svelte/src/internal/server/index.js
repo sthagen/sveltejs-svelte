@@ -23,6 +23,7 @@ import {
 } from '../../utils.js';
 import { Renderer } from './renderer.js';
 import * as e from './errors.js';
+import { ssr_context } from './context.js';
 
 // https://html.spec.whatwg.org/multipage/syntax.html#attributes-2
 // https://infra.spec.whatwg.org/#noncharacter
@@ -64,7 +65,7 @@ export function element(renderer, tag, attributes_fn = noop, children_fn = noop)
  * Takes a component and returns an object with `body` and `head` properties on it, which you can use to populate the HTML when server-rendering your app.
  * @template {Record<string, any>} Props
  * @param {Component<Props> | ComponentType<SvelteComponent<Props>>} component
- * @param {{ props?: Omit<Props, '$$slots' | '$$events'>; context?: Map<any, any>; idPrefix?: string; csp?: Csp }} [options]
+ * @param {{ props?: Omit<Props, '$$slots' | '$$events'>; context?: Map<any, any>; idPrefix?: string; csp?: Csp; transformError?: (error: unknown) => unknown }} [options]
  * @returns {RenderOutput}
  */
 export function render(component, options = {}) {
@@ -105,16 +106,16 @@ export function css_props(renderer, is_html, props, component, dynamic = false) 
 		renderer.push(`<g style="${styles}">`);
 	}
 
-	if (dynamic) {
+	component();
+
+	if (!dynamic) {
 		renderer.push('<!---->');
 	}
 
-	component();
-
 	if (is_html) {
-		renderer.push(`<!----></svelte-css-wrapper>`);
+		renderer.push('</svelte-css-wrapper>');
 	} else {
-		renderer.push(`<!----></g>`);
+		renderer.push('</g>');
 	}
 }
 
@@ -469,7 +470,7 @@ export { push_element, pop_element, validate_snippet_args } from './dev.js';
 
 export { snapshot } from '../shared/clone.js';
 
-export { fallback, to_array } from '../shared/utils.js';
+export { fallback, to_array, exclude_from_object } from '../shared/utils.js';
 
 export {
 	invalid_default_snippet,
@@ -486,17 +487,29 @@ export { escape_html as escape };
  * @returns {(new_value?: T) => (T | void)}
  */
 export function derived(fn) {
-	const get_value = once(fn);
-	/**
-	 * @type {T | undefined}
-	 */
+	// deriveds created during render are memoized,
+	// deriveds created outside (e.g. SvelteKit `page` stuff) are not
+	const get_value = ssr_context === null ? fn : once(fn);
+
+	/** @type {T | undefined} */
 	let updated_value;
 
 	return function (new_value) {
 		if (arguments.length === 0) {
 			return updated_value ?? get_value();
 		}
+
 		updated_value = new_value;
 		return updated_value;
 	};
+}
+
+/**
+ * @template T
+ * @param {()=>T} fn
+ */
+export function async_derived(fn) {
+	return Promise.resolve(fn()).then((value) => {
+		return () => value;
+	});
 }
