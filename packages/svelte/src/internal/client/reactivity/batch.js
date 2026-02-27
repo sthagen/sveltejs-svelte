@@ -66,8 +66,15 @@ let queued_root_effects = [];
 /** @type {Effect | null} */
 let last_scheduled_effect = null;
 
-let is_flushing = false;
 export let is_flushing_sync = false;
+
+/**
+ * During traversal, this is an array. Newly created effects are (if not immediately
+ * executed) pushed to this array, rather than going through the scheduling
+ * rigamarole that would cause another turn of the flush loop.
+ * @type {Effect[] | null}
+ */
+export let collected_effects = null;
 
 export class Batch {
 	/**
@@ -87,7 +94,7 @@ export class Batch {
 	/**
 	 * When the batch is committed (and the DOM is updated), we need to remove old branches
 	 * and append new ones by calling the functions added inside (if/each/key/etc) blocks
-	 * @type {Set<() => void>}
+	 * @type {Set<(batch: Batch) => void>}
 	 */
 	#commit_callbacks = new Set();
 
@@ -185,7 +192,7 @@ export class Batch {
 		this.apply();
 
 		/** @type {Effect[]} */
-		var effects = [];
+		var effects = (collected_effects = []);
 
 		/** @type {Effect[]} */
 		var render_effects = [];
@@ -199,6 +206,8 @@ export class Batch {
 			// log_inconsistent_branches(root);
 		}
 
+		collected_effects = null;
+
 		if (this.#is_deferred()) {
 			this.#defer_effects(render_effects);
 			this.#defer_effects(effects);
@@ -207,18 +216,18 @@ export class Batch {
 				reset_branch(e, t);
 			}
 		} else {
+			// If sources are written to, then work needs to happen in a separate batch, else prior sources would be mixed with
+			// newly updated sources, which could lead to infinite loops when effects run over and over again.
+			previous_batch = this;
+			current_batch = null;
+
 			// append/remove branches
-			for (const fn of this.#commit_callbacks) fn();
+			for (const fn of this.#commit_callbacks) fn(this);
 			this.#commit_callbacks.clear();
 
 			if (this.#pending === 0) {
 				this.#commit();
 			}
-
-			// If sources are written to, then work needs to happen in a separate batch, else prior sources would be mixed with
-			// newly updated sources, which could lead to infinite loops when effects run over and over again.
-			previous_batch = this;
-			current_batch = null;
 
 			flush_queued_effects(render_effects);
 			flush_queued_effects(effects);
@@ -329,17 +338,16 @@ export class Batch {
 	}
 
 	flush() {
-		this.activate();
-
 		if (queued_root_effects.length > 0) {
+			current_batch = this;
 			flush_effects();
+		} else if (this.#pending === 0 && !this.is_fork) {
+			// append/remove branches
+			for (const fn of this.#commit_callbacks) fn(this);
+			this.#commit_callbacks.clear();
 
-			if (current_batch !== null && current_batch !== this) {
-				// this can happen if a new batch was created during `flush_effects()`
-				return;
-			}
-		} else if (this.#pending === 0) {
-			this.process([]); // TODO this feels awkward
+			this.#commit();
+			this.#deferred?.resolve();
 		}
 
 		this.deactivate();
@@ -358,6 +366,7 @@ export class Batch {
 		if (batches.size > 1) {
 			this.previous.clear();
 
+			var previous_batch = current_batch;
 			var previous_batch_values = batch_values;
 			var is_earlier = true;
 
@@ -421,7 +430,7 @@ export class Batch {
 				}
 			}
 
-			current_batch = null;
+			current_batch = previous_batch;
 			batch_values = previous_batch_values;
 		}
 
@@ -479,7 +488,7 @@ export class Batch {
 		this.flush();
 	}
 
-	/** @param {() => void} fn */
+	/** @param {(batch: Batch) => void} fn */
 	oncommit(fn) {
 		this.#commit_callbacks.add(fn);
 	}
@@ -579,8 +588,6 @@ export function flushSync(fn) {
 }
 
 function flush_effects() {
-	is_flushing = true;
-
 	var source_stacks = DEV ? new Set() : null;
 
 	try {
@@ -629,8 +636,8 @@ function flush_effects() {
 	} finally {
 		queued_root_effects = [];
 
-		is_flushing = false;
 		last_scheduled_effect = null;
+		collected_effects = null;
 
 		if (DEV) {
 			for (const source of /** @type {Set<Source>} */ (source_stacks)) {
@@ -836,14 +843,13 @@ export function schedule_effect(signal) {
 		// if the effect is being scheduled because a parent (each/await/etc) block
 		// updated an internal source, or because a branch is being unskipped,
 		// bail out or we'll cause a second flush
-		if (
-			is_flushing &&
-			effect === active_effect &&
-			(flags & BLOCK_EFFECT) !== 0 &&
-			(flags & HEAD_EFFECT) === 0 &&
-			(flags & REACTION_RAN) !== 0
-		) {
-			return;
+		if (collected_effects !== null && effect === active_effect) {
+			// in sync mode, render effects run during traversal. in an extreme edge case
+			// they can be made dirty after they have already been visited, in which
+			// case we shouldn't bail out
+			if (async_mode_flag || (signal.f & RENDER_EFFECT) === 0) {
+				return;
+			}
 		}
 
 		if ((flags & (ROOT_EFFECT | BRANCH_EFFECT)) !== 0) {
