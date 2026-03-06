@@ -43,7 +43,6 @@ export function flatten(blockers, sync, async, fn) {
 		return;
 	}
 
-	var batch = current_batch;
 	var parent = /** @type {Effect} */ (active_effect);
 
 	var restore = capture();
@@ -77,14 +76,17 @@ export function flatten(blockers, sync, async, fn) {
 
 	// Full path: has async expressions
 	function run() {
-		restore();
 		Promise.all(async.map((expression) => async_derived(expression)))
 			.then((result) => finish([...sync.map(d), ...result]))
 			.catch((error) => invoke_error_boundary(error, parent));
 	}
 
 	if (blocker_promise) {
-		blocker_promise.then(run);
+		blocker_promise.then(() => {
+			restore();
+			run();
+			unset_context();
+		});
 	} else {
 		run();
 	}
