@@ -7,14 +7,15 @@ const REGEX_CLOSING_BRACKET = /[\s\]]/;
 const REGEX_ATTRIBUTE_FLAGS = /[a-zA-Z]+/y; // only `i` and `s` are valid today, but make it future-proof
 const REGEX_COMBINATOR = /(\+|~|>|\|\|)/y;
 const REGEX_PERCENTAGE = /\d+(\.\d+)?%/y;
+// `of` must be preceded by whitespace, otherwise it would be part of the `<an+b>` token
+// (`2nof` is a single dimension token). It does not need to be followed by whitespace,
+// because a `.`, `#`, `[`, `*`, `:` or `&` already ends the `of` identifier — minifiers rely on that
 const REGEX_NTH_OF =
-	/(even|odd|\+?(\d+|\d*n(\s*[+-]\s*\d+)?)|-\d*n(\s*\+\s*\d+))((?=\s*[,)])|\s+of\s+)/y;
+	/(even|odd|\+?(\d+|\d*n(\s*[+-]\s*\d+)?)|-\d*n(\s*\+\s*\d+))((?=\s*[,)])|\s+of(\s+|(?=[.#[*:&])))/y;
 const REGEX_WHITESPACE_OR_COLON = /[\s:]/;
 const REGEX_LEADING_HYPHEN_OR_DIGIT = /-?\d/y;
 const REGEX_VALID_IDENTIFIER_CHAR = /[a-zA-Z0-9_-]/;
 const REGEX_UNICODE_SEQUENCE = /\\[0-9a-fA-F]{1,6}(\r\n|\s)?/y;
-const REGEX_COMMENT_CLOSE = /\*\//;
-const REGEX_HTML_COMMENT_CLOSE = /-->/;
 
 /**
  * @param {Parser} parser
@@ -204,15 +205,18 @@ function read_selector(parser, inside_pseudo_class = false) {
 			});
 		} else if (parser.eat('*')) {
 			let name = '*';
+			/** @type {string | undefined} */
+			let namespace;
 
 			if (parser.eat('|')) {
-				// * is the namespace (which we ignore)
-				name = read_identifier(parser);
+				namespace = name;
+				name = parser.eat('*') ? '*' : read_identifier(parser);
 			}
 
 			relative_selector.selectors.push({
 				type: 'TypeSelector',
 				name,
+				...(namespace !== undefined && { namespace }),
 				start,
 				end: parser.index
 			});
@@ -314,15 +318,18 @@ function read_selector(parser, inside_pseudo_class = false) {
 			});
 		} else if (!parser.match_regex(REGEX_COMBINATOR)) {
 			let name = read_identifier(parser);
+			/** @type {string | undefined} */
+			let namespace;
 
 			if (parser.eat('|')) {
-				// we ignore the namespace when trying to find matching element classes
-				name = read_identifier(parser);
+				namespace = name;
+				name = parser.eat('*') ? '*' : read_identifier(parser);
 			}
 
 			relative_selector.selectors.push({
 				type: 'TypeSelector',
 				name,
+				...(namespace !== undefined && { namespace }),
 				start,
 				end: parser.index
 			});
@@ -469,7 +476,7 @@ function read_block_item(parser) {
 function read_declaration(parser) {
 	const start = parser.index;
 
-	const property = parser.read_until(REGEX_WHITESPACE_OR_COLON);
+	const property = parser.read_until_regex(REGEX_WHITESPACE_OR_COLON);
 	parser.allow_whitespace();
 	parser.eat(':');
 	let index = parser.index;
@@ -614,7 +621,8 @@ function read_identifier(parser) {
 		if (char === '\\') {
 			const sequence = parser.match_regex(REGEX_UNICODE_SEQUENCE);
 			if (sequence) {
-				identifier += String.fromCodePoint(parseInt(sequence.slice(1), 16));
+				const character = String.fromCodePoint(parseInt(sequence.slice(1), 16));
+				identifier += character === '\\' ? '\\\\' : character;
 				parser.index += sequence.length;
 			} else {
 				identifier += '\\' + parser.template[parser.index + 1];
@@ -651,7 +659,7 @@ function allow_comment_or_whitespace(parser, capture_comments = true) {
 		}
 
 		if (parser.eat('<!--')) {
-			parser.read_until(REGEX_HTML_COMMENT_CLOSE);
+			parser.read_until('-->');
 			parser.eat('-->', true);
 		}
 
@@ -666,7 +674,7 @@ function allow_comment_or_whitespace(parser, capture_comments = true) {
 function read_comment(parser) {
 	const start = parser.index;
 	parser.eat('/*', true);
-	const value = parser.read_until(REGEX_COMMENT_CLOSE);
+	const value = parser.read_until('*/');
 	parser.eat('*/', true);
 	const end = parser.index;
 
